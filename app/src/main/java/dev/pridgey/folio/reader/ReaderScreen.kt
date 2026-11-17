@@ -72,6 +72,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -190,7 +191,10 @@ private fun PagedReader(
     pageKeys: Flow<Int>,
     toggleChrome: () -> Unit,
 ) {
-    val pager = rememberPagerState(initialPage = start.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { items.size }
+    // The pager reads its count and keys in derived state outside composition. Every lambda reads this
+    // one state, so they always see the same list, even in the frame where the next chapter is appended.
+    val latest = rememberUpdatedState(items)
+    val pager = rememberPagerState(initialPage = start.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { latest.value.size }
     val scope = rememberCoroutineScope()
     val rtl = mode == ReaderMode.RIGHT_TO_LEFT
 
@@ -198,10 +202,10 @@ private fun PagedReader(
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { vm.onPosition(it) }
     }
     LaunchedEffect(pager) {
-        pageKeys.collect { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, items.size - 1)) } }
+        pageKeys.collect { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, latest.value.size - 1)) } }
     }
 
-    val turn: (Int) -> Unit = { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, items.size - 1)) } }
+    val turn: (Int) -> Unit = { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, latest.value.size - 1)) } }
     val onTap: (Offset, Float, Float) -> Unit = { offset, width, height ->
         val third = if (mode == ReaderMode.VERTICAL) offset.y / height else offset.x / width
         when {
@@ -215,12 +219,12 @@ private fun PagedReader(
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
         val page: @Composable (Int) -> Unit = { i ->
-            ReaderPage(vm, items[i], scale, onTap = { onTap(it, w, h) }, isFirst = i == start)
+            latest.value.getOrNull(i)?.let { ReaderPage(vm, it, scale, onTap = { o -> onTap(o, w, h) }, isFirst = i == start) }
         }
         if (mode == ReaderMode.VERTICAL) {
-            VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { items[it].key }) { page(it) }
+            VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { latest.value.getOrNull(it)?.key ?: it }) { page(it) }
         } else {
-            HorizontalPager(pager, Modifier.fillMaxSize(), reverseLayout = rtl, beyondViewportPageCount = 1, key = { items[it].key }) { page(it) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), reverseLayout = rtl, beyondViewportPageCount = 1, key = { latest.value.getOrNull(it)?.key ?: it }) { page(it) }
         }
     }
 }
