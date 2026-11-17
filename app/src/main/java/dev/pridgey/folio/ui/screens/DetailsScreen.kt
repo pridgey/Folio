@@ -36,6 +36,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.border
+import dev.pridgey.folio.ui.theme.rememberCoverColor
+import dev.pridgey.folio.ui.theme.CoverTint
+import dev.pridgey.folio.ui.theme.CoverAccent
+import dev.pridgey.folio.ui.components.sharedCover
 import dev.pridgey.folio.ui.components.TintedButton
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -212,6 +217,13 @@ class DetailsViewModel(private val mangaId: Long) : ViewModel() {
 @Composable
 fun DetailsScreen(route: Routes.Details) {
     val vm: DetailsViewModel = viewModel(key = "details-${route.mangaId}") { DetailsViewModel(route.mangaId) }
+    val manga by vm.manga.collectAsStateWithLifecycle()
+    // The whole page takes its accent from the cover.
+    CoverAccent(manga?.sourceId ?: route.sourceId, manga?.thumbnailUrl ?: route.cover) { DetailsBody(route, vm) }
+}
+
+@Composable
+private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
     val c = Folio.colors
     val nav = LocalNav.current
     val context = LocalContext.current
@@ -232,7 +244,7 @@ fun DetailsScreen(route: Routes.Details) {
     val glass = rememberGlassState()
     val list = rememberLazyListState()
     val density = LocalDensity.current
-    val collapsed by remember { derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > with(density) { 300.dp.toPx() } } }
+    val collapsed by remember { derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > with(density) { 400.dp.toPx() } } }
     val selecting = selection.isNotEmpty()
     var exploring by remember { mutableStateOf(false) }
     BackHandler(selecting) { vm.clearSelection() }
@@ -251,7 +263,7 @@ fun DetailsScreen(route: Routes.Details) {
                     Hero(sourceId, cover, title, manga, route.coverKey, all?.size)
                 }
                 item(key = "actions") {
-                    Column(Modifier.padding(horizontal = 16.dp)) {
+                    Column(Modifier.padding(horizontal = 20.dp)) {
                         val nextLabel = next?.let { n ->
                             val number = ChapterNumbers.format(n.number)
                             when {
@@ -297,12 +309,12 @@ fun DetailsScreen(route: Routes.Details) {
                     item {
                         Notice(
                             "Updating ${Graph.sources.nameOf(sourceId)}…", "The site changed. Folio is fetching a fixed source and will retry.",
-                            Icons.Rounded.SyncProblem, c.warning, busy = true, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                            Icons.Rounded.SyncProblem, c.warning, busy = true, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
                         )
                     }
                 } else if (error != null) {
                     item {
-                        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Notice(
                                 "Couldn't refresh", error, Icons.Rounded.CloudOff, c.danger,
                                 action = "Retry", onAction = vm::refresh,
@@ -458,35 +470,49 @@ fun DetailsScreen(route: Routes.Details) {
 private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEntity?, coverKey: String?, chapterCount: Int?) {
     val c = Folio.colors
     val context = LocalContext.current
+    val tint = rememberCoverColor(sourceId, cover)
+    val backdrop = tint?.let { CoverTint.asBackdrop(it, c.isDark) } ?: c.background
+    val artHeight = 500.dp
     Box(Modifier.fillMaxWidth()) {
-        // A blurred wash of the cover behind everything, fading into the page.
-        if (cover != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(CoverModel(sourceId, cover)).memoryCacheKey("cover:$sourceId:$cover").build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(420.dp).blur(48.dp).graphicsLayer { alpha = if (c.isDark) 0.75f else 0.6f; scaleX = 1.25f; scaleY = 1.25f },
-            )
-        }
-        Box(Modifier.fillMaxWidth().height(420.dp).background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to c.background.copy(alpha = 0.55f), 1f to c.background)))
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(60.dp))
-            Cover(sourceId, cover, title, Modifier.width(168.dp), corner = 12.dp, sharedKey = coverKey, elevation = 18.dp)
-            Spacer(Modifier.height(20.dp))
-            Text(title, style = Folio.type.title2, color = c.label, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            val people = listOfNotNull(manga?.author, manga?.artist?.takeIf { it != manga.author }).joinToString(" · ")
-            if (people.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(people, style = Folio.type.subhead, color = c.accent, textAlign = TextAlign.Center, maxLines = 2)
+        // The cover, full-bleed and sharp: the page is its poster.
+        Box(Modifier.fillMaxWidth().height(artHeight).sharedCover(coverKey).background(c.placeholder)) {
+            if (cover != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context).data(CoverModel(sourceId, cover)).memoryCacheKey("cover:$sourceId:$cover").build(),
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.TopCenter,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
-            Spacer(Modifier.height(6.dp))
+        }
+        // Keeps the bar's buttons readable over any art.
+        Box(Modifier.fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(c.background.copy(alpha = 0.7f), Color.Transparent))))
+        // Art dissolves through the cover's own colour into the page.
+        Box(
+            Modifier.fillMaxWidth().height(artHeight).background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent, 0.4f to Color.Transparent,
+                    0.72f to backdrop.copy(alpha = 0.72f), 0.9f to c.background.copy(alpha = 0.96f), 1f to c.background,
+                ),
+            ),
+        )
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+            Spacer(Modifier.height(318.dp))
             val meta = listOfNotNull(
                 manga?.status?.let { Format.status(it) },
                 Graph.sources.nameOf(sourceId),
                 chapterCount?.takeIf { it > 0 }?.let { Format.plural(it, "chapter") },
             ).joinToString("  ·  ")
-            Text(meta, style = Folio.type.footnote, color = c.secondaryLabel, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(20.dp))
+            Text(meta.uppercase(), style = Folio.type.eyebrow, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(8.dp))
+            Text(title, style = Folio.type.largeTitle, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            val people = listOfNotNull(manga?.author, manga?.artist?.takeIf { it != manga.author }).joinToString(" · ")
+            if (people.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(people, style = Folio.type.subhead, color = c.secondaryLabel, maxLines = 2)
+            }
+            Spacer(Modifier.height(22.dp))
         }
     }
 }
@@ -494,17 +520,20 @@ private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEnti
 @Composable
 private fun ActionTile(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) {
     val c = Folio.colors
-    Column(
+    Row(
         modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (active) c.accentSoft else c.fill)
+            .height(44.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (active) c.accentSoft else Color.Transparent)
+            .border(1.dp, if (active) Color.Transparent else c.separator.copy(alpha = c.separator.alpha * 1.6f), RoundedCornerShape(50))
             .pressable(onClick = onClick, haptic = true)
-            .padding(vertical = 11.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, tint = c.accent, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = Folio.type.caption2, color = if (active) c.accent else c.label, maxLines = 1)
+        Icon(icon, null, tint = if (active) c.accent else c.label, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = Folio.type.footnoteStrong, color = if (active) c.accent else c.label, maxLines = 1)
     }
 }
 
@@ -513,7 +542,7 @@ private fun About(manga: MangaEntity?) {
     val c = Folio.colors
     var expanded by remember { mutableStateOf(false) }
     val description = manga?.description?.trim().orEmpty()
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp)) {
+    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp)) {
         if (manga == null || (!manga.initialized && description.isEmpty())) {
             SkeletonBox(Modifier.fillMaxWidth().height(14.dp), 4.dp)
             Spacer(Modifier.height(8.dp))
@@ -557,7 +586,7 @@ private fun ChapterHeader(
     val c = Folio.colors
     var menu by remember { mutableStateOf(false) }
     val rotation by animateFloatAsState(if (descending) 0f else 180f, label = "sort")
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 26.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 26.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(if (count == null) "Chapters" else Format.plural(count, "Chapter"), style = Folio.type.title3, color = c.label)
             if (filter != ChapterFilter.ALL) Text(filter.label, style = Folio.type.footnote, color = c.accent)
@@ -611,7 +640,7 @@ private fun ChapterRow(
                 .fillMaxWidth()
                 .background(if (selected) c.accentSoft else Color.Transparent)
                 .pressable(onClick = onClick, onLongClick = { if (selecting) onLongClick() else menu = true }, pressedScale = 0.985f)
-                .padding(start = 16.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+                .padding(start = 20.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (selecting) {
@@ -673,7 +702,7 @@ private fun DownloadButton(state: DownloadState, onClick: () -> Unit) {
 
 @Composable
 private fun ChapterSkeleton() {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
         SkeletonBox(Modifier.fillMaxWidth(0.55f).height(14.dp), 4.dp)
         Spacer(Modifier.height(6.dp))
         SkeletonBox(Modifier.fillMaxWidth(0.3f).height(10.dp), 4.dp)

@@ -50,6 +50,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -261,13 +266,14 @@ fun PrimaryButton(
     subtitle: String? = null,
 ) {
     val c = Folio.colors
+    val fg = if (enabled) c.onAccent else c.tertiaryLabel
     Box(
         modifier
-            .heightIn(min = 52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .heightIn(min = 54.dp)
+            .clip(RoundedCornerShape(50))
             .background(if (enabled) c.accent else c.fill)
-            .pressable(onClick = onClick, enabled = enabled && !loading, haptic = true, pressedScale = 0.98f)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .pressable(onClick = onClick, enabled = enabled && !loading, haptic = true, pressedScale = 0.97f)
+            .padding(horizontal = 22.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         if (loading) {
@@ -275,13 +281,13 @@ fun PrimaryButton(
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 icon?.let {
-                    Icon(it, null, tint = if (enabled) c.onAccent else c.tertiaryLabel, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Icon(it, null, tint = fg, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text, style = Folio.type.headline, color = if (enabled) c.onAccent else c.tertiaryLabel, maxLines = 1)
+                Column {
+                    Text(text, style = Folio.type.title3.copy(fontSize = 18.sp, lineHeight = 21.sp), color = fg, maxLines = 1)
                     subtitle?.let {
-                        Text(it, style = Folio.type.caption, color = (if (enabled) c.onAccent else c.tertiaryLabel).copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(it, style = Folio.type.caption, color = fg.copy(alpha = 0.78f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -292,21 +298,22 @@ fun PrimaryButton(
 @Composable
 fun TintedButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
     val c = Folio.colors
+    val fg = if (enabled) c.accent else c.tertiaryLabel
     Row(
         modifier
             .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(c.accentSoft)
-            .pressable(onClick = onClick, enabled = enabled, pressedScale = 0.97f)
+            .clip(RoundedCornerShape(50))
+            .background(if (enabled) c.accentSoft else c.fill)
+            .pressable(onClick = onClick, enabled = enabled, pressedScale = 0.96f)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         icon?.let {
-            Icon(it, null, tint = c.accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+            Icon(it, null, tint = fg, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
         }
-        Text(text, style = Folio.type.subheadStrong, color = c.accent, maxLines = 1)
+        Text(text, style = Folio.type.subheadStrong, color = fg, maxLines = 1)
     }
 }
 
@@ -345,8 +352,9 @@ fun BarTextButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
     )
 }
 
-// ------------------------------------------------------------------ Segmented control
+// ------------------------------------------------------------------ Pill selector
 
+/** One-of-several choice as a row of pills; the chosen one is filled with ink. */
 @Composable
 fun <T> SegmentedControl(
     options: List<T>,
@@ -357,23 +365,18 @@ fun <T> SegmentedControl(
 ) {
     val c = Folio.colors
     val haptics = LocalHapticFeedback.current
-    Row(
-        modifier
-            .height(34.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(c.fill)
-            .padding(2.dp),
-    ) {
+    Row(modifier.height(38.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { option ->
             val isSelected = option == selected
-            val bg by animateColorAsState(if (isSelected) (if (c.isDark) Color(0xFF636366) else Color.White) else Color.Transparent, spring(stiffness = Spring.StiffnessMediumLow), label = "seg")
+            val bg by animateColorAsState(if (isSelected) c.label else Color.Transparent, spring(stiffness = Spring.StiffnessMediumLow), label = "pill")
+            val fg by animateColorAsState(if (isSelected) c.background else c.label, spring(stiffness = Spring.StiffnessMediumLow), label = "pillText")
             Box(
                 Modifier
                     .weight(1f)
                     .fillMaxSize()
-                    .shadow(if (isSelected) 2.dp else 0.dp, RoundedCornerShape(7.dp))
-                    .clip(RoundedCornerShape(7.dp))
+                    .clip(RoundedCornerShape(50))
                     .background(bg)
+                    .border(1.dp, if (isSelected) Color.Transparent else c.separator.copy(alpha = c.separator.alpha * 1.6f), RoundedCornerShape(50))
                     .clickable(remember { MutableInteractionSource() }, indication = null) {
                         if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(option)
@@ -381,18 +384,17 @@ fun <T> SegmentedControl(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    label(option),
-                    style = if (isSelected) Folio.type.footnoteStrong else Folio.type.footnote,
-                    color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 6.dp),
+                    label(option), style = Folio.type.footnoteStrong, color = fg,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
         }
     }
 }
 
-// ------------------------------------------------------------------ Grouped lists (settings style)
+// ------------------------------------------------------------------ Lists (settings style)
 
+/** A titled group of rows. Open, not boxed: a heading, the rows, and a note. */
 @Composable
 fun GroupedSection(
     modifier: Modifier = Modifier,
@@ -401,26 +403,26 @@ fun GroupedSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Folio.colors
-    Column(modifier.padding(horizontal = 16.dp)) {
+    Column(modifier) {
         header?.let {
-            Text(it.uppercase(), style = Folio.type.sectionHeader, color = c.secondaryLabel, modifier = Modifier.padding(start = 16.dp, bottom = 7.dp, top = 6.dp))
+            Text(it, style = Folio.type.sectionHeader, color = c.label, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp, top = 4.dp))
         }
-        Column(Modifier.clip(RoundedCornerShape(12.dp)).background(c.surface), content = content)
+        Column(content = content)
         footer?.let {
-            Text(it, style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 7.dp))
+            Text(it, style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp))
         }
     }
 }
 
 @Composable
 fun GroupedDivider(inset: Dp = 16.dp) =
-    HorizontalDivider(Modifier.padding(start = inset), thickness = 0.5.dp, color = Folio.colors.separator)
+    HorizontalDivider(Modifier.padding(start = inset + 4.dp, end = 20.dp), thickness = 0.5.dp, color = Folio.colors.separator)
 
-/** An icon in a rounded square, like settings icons. */
+/** A row's icon: a plain glyph that leads the eye, never a coloured tile. */
 @Composable
-fun RowIcon(icon: ImageVector, background: Color) {
-    Box(Modifier.size(29.dp).clip(RoundedCornerShape(7.dp)).background(background), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
+fun RowIcon(icon: ImageVector, @Suppress("UNUSED_PARAMETER") background: Color = Color.Unspecified) {
+    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = Folio.colors.secondaryLabel, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -432,7 +434,7 @@ fun GroupedRow(
     icon: ImageVector? = null,
     iconBackground: Color = Folio.colors.accent,
     value: String? = null,
-    chevron: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") chevron: Boolean = false,
     titleColor: Color = Folio.colors.label,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
@@ -445,25 +447,22 @@ fun GroupedRow(
             .fillMaxWidth()
             .background(if (pressed) c.fill else Color.Transparent)
             .then(if (onClick != null) Modifier.clickable(source, indication = null, onClick = onClick) else Modifier)
-            .heightIn(min = 46.dp)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let {
             RowIcon(it, iconBackground)
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(16.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(title, style = Folio.type.body, color = titleColor)
             subtitle?.let { Text(it, style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(top = 1.dp)) }
         }
         value?.let {
-            Text(it, style = Folio.type.body, color = c.secondaryLabel, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+            Text(it, style = Folio.type.subheadStrong, color = c.accent, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
         }
         trailing?.invoke(this)
-        if (chevron) {
-            Icon(Icons.Rounded.ChevronRight, null, tint = c.tertiaryLabel, modifier = Modifier.padding(start = 4.dp).size(22.dp))
-        }
     }
 }
 
@@ -485,6 +484,7 @@ fun ToggleRow(
             onChange(!checked)
         }) else null,
     ) {
+        Spacer(Modifier.width(12.dp))
         FolioSwitch(checked, { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChange(it) }, enabled)
     }
 }
@@ -495,8 +495,8 @@ fun FolioSwitch(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean 
     Switch(
         checked = checked, onCheckedChange = onChange, enabled = enabled,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White, checkedTrackColor = c.success, checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = Color.White, uncheckedTrackColor = c.fill, uncheckedBorderColor = Color.Transparent,
+            checkedThumbColor = c.onAccent, checkedTrackColor = c.accent, checkedBorderColor = Color.Transparent,
+            uncheckedThumbColor = c.secondaryLabel, uncheckedTrackColor = Color.Transparent, uncheckedBorderColor = c.tertiaryLabel,
         ),
         thumbContent = null,
     )
@@ -556,55 +556,55 @@ fun SearchField(
 
 // ------------------------------------------------------------------ Bars
 
-/** The bar at the top of a screen. Its small title fades in once the large title scrolls away. */
+/**
+ * The bar at the top of a screen. Over content it's clear; once the big title scrolls away the bar
+ * fills with the page colour and the title settles into it, left-aligned.
+ */
 @Composable
 fun TopBar(
     title: String,
-    glass: GlassState?,
+    @Suppress("UNUSED_PARAMETER") glass: GlassState?,
     showTitle: Boolean,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
-    backLabel: String? = null,
+    @Suppress("UNUSED_PARAMETER") backLabel: String? = null,
     showDivider: Boolean = showTitle,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Folio.colors
-    val titleAlpha by animateFloatAsState(if (showTitle) 1f else 0f, tween(180), label = "title")
-    val dividerAlpha by animateFloatAsState(if (showDivider) 1f else 0f, tween(180), label = "divider")
-    val glassAlpha by animateFloatAsState(if (showDivider) 1f else 0f, tween(220), label = "glass")
-    Box(
+    val titleAlpha by animateFloatAsState(if (showTitle) 1f else 0f, tween(200), label = "title")
+    val fill by animateFloatAsState(if (showDivider) 1f else 0f, tween(220), label = "fill")
+    Row(
         modifier
             .fillMaxWidth()
-            .then(if (glass != null && glassAlpha > 0f) Modifier.glass(glass, c.glass.copy(alpha = c.glass.alpha * glassAlpha)) else Modifier)
+            .drawBehind { if (fill > 0f) drawRect(c.background.copy(alpha = 0.97f * fill)) }
             .windowInsetsPadding(WindowInsets.statusBars)
-            .height(48.dp)
-            .drawBehind {
-                drawLine(c.separator.copy(alpha = c.separator.alpha * dividerAlpha), Offset(0f, size.height), Offset(size.width, size.height), 0.5.dp.toPx())
-            },
+            .height(56.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            Row(
-                Modifier.align(Alignment.CenterStart).padding(start = 4.dp).clip(RoundedCornerShape(10.dp))
-                    .pressable(onClick = onBack).padding(horizontal = 6.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).pressable(onClick = onBack, pressedScale = 0.9f),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = c.accent, modifier = Modifier.size(20.dp))
-                backLabel?.let { Text(it, style = Folio.type.body, color = c.accent, maxLines = 1) }
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = c.label, modifier = Modifier.size(24.dp))
             }
+        } else {
+            Spacer(Modifier.width(12.dp))
         }
         Text(
-            title, style = Folio.type.headline, color = c.label.copy(alpha = titleAlpha), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = 96.dp),
+            title, style = Folio.type.title3, color = c.label.copy(alpha = titleAlpha), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp).graphicsLayer { translationY = (1f - titleAlpha) * 10f },
         )
-        Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), content = actions)
     }
 }
 
-/** The big bold title at the top of a tab, in the scrolling content. */
+/** The title at the top of a tab, set big in the display face. */
 @Composable
-fun LargeTitle(text: String, modifier: Modifier = Modifier, inset: Dp = 16.dp, trailing: @Composable RowScope.() -> Unit = {}) {
-    Row(modifier.fillMaxWidth().padding(start = inset, end = (inset - 4.dp).coerceAtLeast(0.dp), top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+fun LargeTitle(text: String, modifier: Modifier = Modifier, inset: Dp = 20.dp, trailing: @Composable RowScope.() -> Unit = {}) {
+    Row(modifier.fillMaxWidth().padding(start = inset, end = (inset - 4.dp).coerceAtLeast(0.dp), top = 4.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
         Text(text, style = Folio.type.largeTitle, color = Folio.colors.label, modifier = Modifier.weight(1f))
         trailing()
     }
@@ -612,42 +612,52 @@ fun LargeTitle(text: String, modifier: Modifier = Modifier, inset: Dp = 16.dp, t
 
 data class TabItem(val key: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector, val badge: Int = 0)
 
-/** The glass tab bar along the bottom. */
+/** A floating dock. The current tab opens into a labelled pill; the rest are quiet icons. */
 @Composable
 fun TabBar(tabs: List<TabItem>, selected: String, onSelect: (String) -> Unit, glass: GlassState, modifier: Modifier = Modifier) {
     val c = Folio.colors
     val haptics = LocalHapticFeedback.current
-    Row(
-        modifier
-            .fillMaxWidth()
-            .glass(glass, c.glass)
-            .drawBehind { drawLine(c.separator, Offset.Zero, Offset(size.width, 0f), 0.5.dp.toPx()) }
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .height(56.dp),
-    ) {
-        tabs.forEach { tab ->
-            val isSelected = tab.key == selected
-            val tint by animateColorAsState(if (isSelected) c.accent else c.secondaryLabel.copy(alpha = 0.75f), label = "tab")
-            val lift by animateDpAsState(if (isSelected) 0.dp else 1.dp, label = "lift")
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .clickable(remember { MutableInteractionSource() }, indication = null) {
-                        if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSelect(tab.key)
+    Box(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .shadow(18.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
+                .clip(RoundedCornerShape(50))
+                .glass(glass, if (c.isDark) Color(0xFF1C1C20).copy(alpha = 0.82f) else Color(0xFFFFFEFB).copy(alpha = 0.86f))
+                .border(0.75.dp, c.separator, RoundedCornerShape(50))
+                .height(62.dp)
+                .padding(horizontal = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            tabs.forEach { tab ->
+                val isSelected = tab.key == selected
+                val bg by animateColorAsState(if (isSelected) c.accent else Color.Transparent, spring(stiffness = Spring.StiffnessMediumLow), label = "dock")
+                val fg by animateColorAsState(if (isSelected) c.onAccent else c.secondaryLabel, label = "dockFg")
+                Row(
+                    Modifier
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(bg)
+                        .clickable(remember { MutableInteractionSource() }, indication = null) {
+                            if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onSelect(tab.key)
+                        }
+                        .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
+                        .padding(horizontal = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box {
+                        Icon(if (isSelected) tab.selectedIcon else tab.icon, tab.label, tint = fg, modifier = Modifier.size(24.dp))
+                        if (tab.badge > 0 && !isSelected) {
+                            Box(Modifier.align(Alignment.TopEnd).padding(start = 16.dp).offset(x = 6.dp, y = (-4).dp)) { CountBadge(tab.badge, small = true) }
+                        }
                     }
-                    .padding(top = 6.dp + lift),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box {
-                    Icon(if (isSelected) tab.selectedIcon else tab.icon, tab.label, tint = tint, modifier = Modifier.size(26.dp))
-                    if (tab.badge > 0) {
-                        Box(Modifier.align(Alignment.TopEnd).padding(start = 18.dp)) { CountBadge(tab.badge, small = true) }
+                    if (isSelected) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(tab.label, style = Folio.type.subheadStrong, color = fg, maxLines = 1)
                     }
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(tab.label, style = Folio.type.caption2, color = tint)
             }
         }
     }
@@ -772,15 +782,15 @@ fun Chip(text: String, modifier: Modifier = Modifier, selected: Boolean = false,
 /** A section heading inside scrolling content, with an optional action on the right. */
 @Composable
 fun SectionHeading(title: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 18.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = Folio.type.title3, color = Folio.colors.label, modifier = Modifier.weight(1f))
+    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = Folio.type.title2, color = Folio.colors.label, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) BarTextButton(action, onAction)
     }
 }
 
 /** Space for the floating tab bar at the end of scrolling content. */
 @Composable
-fun BottomBarSpacer() = Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(72.dp))
+fun BottomBarSpacer() = Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(96.dp))
 
 @Composable
 fun Centered(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) =

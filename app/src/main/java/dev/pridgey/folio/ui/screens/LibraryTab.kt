@@ -34,6 +34,13 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.border
+import dev.pridgey.folio.ui.theme.rememberCoverColor
+import dev.pridgey.folio.ui.theme.CoverTint
+import dev.pridgey.folio.ui.theme.CoverAccent
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Check
@@ -172,7 +179,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                 if (recent.isNotEmpty() && query.isBlank()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "continue") {
                         Column {
-                            Text("Continue Reading", style = Folio.type.title3, color = c.label, modifier = Modifier.padding(top = 8.dp, bottom = 10.dp))
+                            Text("Continue reading", style = Folio.type.title2, color = c.label, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(end = 16.dp),
@@ -199,8 +206,8 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     item(span = { GridItemSpan(maxLineSpan) }, key = "heading") {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text(
-                                if (query.isBlank()) "All Titles" else "Results",
-                                style = Folio.type.title3, color = c.label, modifier = Modifier.weight(1f),
+                                if (query.isBlank()) "All titles" else "Results",
+                                style = Folio.type.title2, color = c.label, modifier = Modifier.weight(1f),
                             )
                             Text(Format.plural(list.size, "title"), style = Folio.type.footnote, color = c.secondaryLabel)
                         }
@@ -283,8 +290,10 @@ private fun LibraryTile(item: LibraryItem, modifier: Modifier = Modifier, onClic
 }
 
 @Composable
-private fun ContinueCard(entry: ReadingEntry, onClick: () -> Unit) {
+private fun ContinueCard(entry: ReadingEntry, onClick: () -> Unit) = CoverAccent(entry.sourceId, entry.thumbnailUrl) {
     val c = Folio.colors
+    val tint = rememberCoverColor(entry.sourceId, entry.thumbnailUrl)
+    val backdrop by animateColorAsState(tint?.let { CoverTint.asBackdrop(it, c.isDark) } ?: c.surface, tween(450), label = "cardBackdrop")
     val progress = when {
         entry.read -> 1f
         entry.pageCount > 0 -> (entry.lastPageRead + 1f) / entry.pageCount
@@ -292,27 +301,27 @@ private fun ContinueCard(entry: ReadingEntry, onClick: () -> Unit) {
     }
     Row(
         Modifier
-            .width(292.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(c.surface)
+            .width(304.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(backdrop)
+            .border(0.75.dp, c.coverStroke, RoundedCornerShape(22.dp))
             .pressable(onClick = onClick)
-            .padding(10.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Cover(entry.sourceId, entry.thumbnailUrl, entry.title, Modifier.width(62.dp), corner = 7.dp, elevation = 3.dp)
-        Spacer(Modifier.width(12.dp))
+        Cover(entry.sourceId, entry.thumbnailUrl, entry.title, Modifier.width(68.dp), corner = 10.dp, elevation = 6.dp)
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(entry.title, style = Folio.type.subheadStrong, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(if (entry.read) "FINISHED" else "CONTINUE", style = Folio.type.eyebrow, color = c.accent)
+            Spacer(Modifier.height(3.dp))
+            Text(entry.title, style = Folio.type.title3.copy(fontSize = 18.sp, lineHeight = 21.sp), color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Text(
-                if (entry.read) "Finished ${entry.chapterName}" else entry.chapterName,
-                style = Folio.type.footnote, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            Text(entry.chapterName, style = Folio.type.footnote, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ProgressBar(progress, Modifier.weight(1f))
+                ProgressBar(progress, Modifier.weight(1f), track = c.label.copy(alpha = 0.12f))
                 Spacer(Modifier.width(10.dp))
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(50)).background(c.accent), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(30.dp).clip(RoundedCornerShape(50)).background(c.accent), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.PlayArrow, "Continue", tint = c.onAccent, modifier = Modifier.size(18.dp))
                 }
             }

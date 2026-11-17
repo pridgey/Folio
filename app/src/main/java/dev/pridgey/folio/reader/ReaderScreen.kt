@@ -46,6 +46,8 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import dev.pridgey.folio.ui.theme.CoverAccent
 import dev.pridgey.folio.ui.screens.ChapterExplorerSheet
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
@@ -118,6 +120,12 @@ import me.saket.telephoto.zoomable.rememberZoomableState
 
 @Composable
 fun ReaderScreen(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, onChromeVisible: (Boolean) -> Unit) {
+    val manga = vm.state.collectAsStateWithLifecycle().value.manga
+    CoverAccent(manga?.sourceId ?: 0L, manga?.thumbnailUrl) { ReaderBody(vm, pageKeys, onExit, onChromeVisible) }
+}
+
+@Composable
+private fun ReaderBody(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, onChromeVisible: (Boolean) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by Graph.settings.values.collectAsStateWithLifecycle()
     var chrome by remember { mutableStateOf(false) }
@@ -499,7 +507,7 @@ private fun ReaderChrome(
                 Modifier.fillMaxWidth().background(glass).windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircleButton(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", onExit, background = Color.White.copy(alpha = 0.1f), tint = Color.White)
+                CircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onExit, background = Color.White.copy(alpha = 0.1f), tint = Color.White)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(state.manga?.title.orEmpty(), style = Folio.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
