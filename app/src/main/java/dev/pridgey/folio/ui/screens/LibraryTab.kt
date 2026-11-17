@@ -76,6 +76,7 @@ import dev.pridgey.folio.ui.components.Cover
 import dev.pridgey.folio.ui.components.EmptyState
 import dev.pridgey.folio.ui.components.Format
 import dev.pridgey.folio.ui.components.GlassState
+import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.LargeTitle
 import dev.pridgey.folio.ui.components.ProgressBar
 import dev.pridgey.folio.ui.components.SearchField
@@ -137,7 +138,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                 refreshing = true
                 LibraryUpdateWorker.runNow(context)
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().glassSource(glass),
         ) {
             LazyVerticalGrid(
                 state = grid,

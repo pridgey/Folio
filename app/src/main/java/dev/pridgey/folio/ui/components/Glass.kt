@@ -36,6 +36,9 @@ class GlassState internal constructor(internal val source: GraphicsLayer, intern
     internal var origin by mutableStateOf(Offset.Zero)
     internal var size by mutableStateOf(IntSize.Zero)
 
+    /** True while the source is recording. A bar drawn then is inside its own source. */
+    internal var recording = false
+
     companion object {
         // Robolectric's renderer crashes on RenderEffect; screenshot tests get the tint fallback.
         val blurSupported = Build.VERSION.SDK_INT >= 31 && Build.FINGERPRINT != "robolectric"
@@ -56,7 +59,12 @@ fun Modifier.glassSource(state: GlassState): Modifier = this
         state.size = it.size
     }
     .drawWithContent {
-        state.source.record { this@drawWithContent.drawContent() }
+        state.recording = true
+        try {
+            state.source.record { this@drawWithContent.drawContent() }
+        } finally {
+            state.recording = false
+        }
         drawLayer(state.source)
     }
 
@@ -66,7 +74,9 @@ fun Modifier.glass(state: GlassState, tint: Color, radius: Dp = 28.dp): Modifier
     return this
         .onGloballyPositioned { position = it.positionInRoot() }
         .drawBehind {
-            if (GlassState.blurSupported && state.size != IntSize.Zero) {
+            // A bar inside its own source would draw the source inside itself forever and overflow
+            // the render thread's stack, so it gets the plain tint instead.
+            if (GlassState.blurSupported && state.size != IntSize.Zero && !state.recording) {
                 val r = radius.toPx()
                 state.blurred.renderEffect = BlurEffect(r, r, TileMode.Clamp)
                 state.blurred.record(state.size) { drawLayer(state.source) }

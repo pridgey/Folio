@@ -64,6 +64,7 @@ import dev.pridgey.folio.ui.LocalNav
 import dev.pridgey.folio.ui.components.BottomBarSpacer
 import dev.pridgey.folio.ui.components.Format
 import dev.pridgey.folio.ui.components.GlassState
+import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.GroupedDivider
 import dev.pridgey.folio.ui.components.GroupedRow
 import dev.pridgey.folio.ui.components.GroupedSection
@@ -117,7 +118,7 @@ fun SettingsTab(glass: GlassState) {
     }
 
     Box(Modifier.fillMaxSize().background(c.grouped)) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize().glassSource(glass), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             item { Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(48.dp)) }
             item { LargeTitle("Settings", Modifier.padding(bottom = 0.dp)) }
 

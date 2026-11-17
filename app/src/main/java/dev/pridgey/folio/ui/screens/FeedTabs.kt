@@ -62,6 +62,7 @@ import dev.pridgey.folio.ui.components.Cover
 import dev.pridgey.folio.ui.components.EmptyState
 import dev.pridgey.folio.ui.components.Format
 import dev.pridgey.folio.ui.components.GlassState
+import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.LargeTitle
 import dev.pridgey.folio.ui.components.ProgressBar
 import dev.pridgey.folio.ui.components.TopBar
@@ -94,6 +95,7 @@ fun UpdatesTab(glass: GlassState) {
         PullToRefreshBox(
             isRefreshing = refreshing || sync != null,
             onRefresh = { refreshing = true; LibraryUpdateWorker.runNow(context) },
+            modifier = Modifier.fillMaxSize().glassSource(glass),
         ) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                 item { Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(48.dp)) }
@@ -181,7 +183,7 @@ fun HistoryTab(glass: GlassState) {
     var confirmClear by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize().glassSource(glass)) {
             item { Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(48.dp)) }
             item { LargeTitle("History") }
             val entries = history

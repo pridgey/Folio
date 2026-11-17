@@ -37,7 +37,6 @@ import dev.pridgey.folio.Graph
 import dev.pridgey.folio.ui.MainActivity
 import dev.pridgey.folio.ui.components.TabBar
 import dev.pridgey.folio.ui.components.TabItem
-import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.rememberGlassState
 import dev.pridgey.folio.ui.theme.Folio
 import dev.pridgey.folio.update.Updater
@@ -69,7 +68,8 @@ fun HomeScreen(initialTab: String?, onTabConsumed: () -> Unit) {
     )
 
     Box(Modifier.fillMaxSize().background(Folio.colors.background)) {
-        Box(Modifier.fillMaxSize().glassSource(glass)) {
+        // Each tab marks its own scrolling content as the glass source; the bars must stay outside it.
+        Box(Modifier.fillMaxSize()) {
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },

@@ -70,6 +70,7 @@ import dev.pridgey.folio.ui.components.Chip
 import dev.pridgey.folio.ui.components.CircleButton
 import dev.pridgey.folio.ui.components.Cover
 import dev.pridgey.folio.ui.components.GlassState
+import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.LargeTitle
 import dev.pridgey.folio.ui.components.Notice
 import dev.pridgey.folio.ui.components.SearchField
@@ -137,7 +138,7 @@ fun DiscoverTab(glass: GlassState, vm: DiscoverViewModel = viewModel()) {
     val sourceName = Graph.sources.nameOf(sourceId)
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize().glassSource(glass)) {
             item { Spacer(Modifier.windowInsetsPadding(WindowInsets.statusBars).height(48.dp)) }
             item {
                 LargeTitle("Discover")
