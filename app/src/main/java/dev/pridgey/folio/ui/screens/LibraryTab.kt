@@ -185,7 +185,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                                 contentPadding = PaddingValues(end = 16.dp),
                                 modifier = Modifier.padding(end = 0.dp),
                             ) {
-                                items(recent, key = { it.mangaId }) { entry -> ContinueCard(entry) { nav.continueReading(entry.mangaId) } }
+                                items(recent, key = { it.mangaId }) { entry -> ContinueCard(entry, onOpenTitle = { nav.details(entry.mangaId, entry.sourceId, entry.thumbnailUrl) }) { nav.continueReading(entry.mangaId) } }
                             }
                         }
                     }
@@ -290,7 +290,7 @@ private fun LibraryTile(item: LibraryItem, modifier: Modifier = Modifier, onClic
 }
 
 @Composable
-private fun ContinueCard(entry: ReadingEntry, onClick: () -> Unit) = CoverAccent(entry.sourceId, entry.thumbnailUrl) {
+private fun ContinueCard(entry: ReadingEntry, onOpenTitle: () -> Unit, onClick: () -> Unit) = CoverAccent(entry.sourceId, entry.thumbnailUrl) {
     val c = Folio.colors
     val tint = rememberCoverColor(entry.sourceId, entry.thumbnailUrl)
     val backdrop by animateColorAsState(tint?.let { CoverTint.asBackdrop(it, c.isDark) } ?: c.surface, tween(450), label = "cardBackdrop")
@@ -305,11 +305,12 @@ private fun ContinueCard(entry: ReadingEntry, onClick: () -> Unit) = CoverAccent
             .clip(RoundedCornerShape(22.dp))
             .background(backdrop)
             .border(0.75.dp, c.coverStroke, RoundedCornerShape(22.dp))
-            .pressable(onClick = onClick)
+            .pressable(onClick = onClick, onLongClick = onOpenTitle)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Cover(entry.sourceId, entry.thumbnailUrl, entry.title, Modifier.width(68.dp), corner = 10.dp, elevation = 6.dp)
+        // The cover opens the title's page; the rest of the card keeps reading.
+        Cover(entry.sourceId, entry.thumbnailUrl, entry.title, Modifier.width(68.dp).pressable(onClick = onOpenTitle, haptic = true), corner = 10.dp, elevation = 6.dp)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(if (entry.read) "FINISHED" else "CONTINUE", style = Folio.type.eyebrow, color = c.accent)

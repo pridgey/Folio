@@ -49,7 +49,13 @@ class ReaderActivity : ComponentActivity() {
         setContent {
             val settings = Graph.settings.current
             FolioTheme(settings.theme, settings.accent, forceDark = true) {
-                ReaderScreen(vm, pageKeys, onExit = { finish() }, onChromeVisible = ::showSystemBars)
+                ReaderScreen(
+                    vm, pageKeys, onExit = { finish() }, onChromeVisible = ::showSystemBars,
+                    onOpenTitle = { mangaId, sourceId ->
+                        startActivity(dev.pridgey.folio.ui.MainActivity.titleIntent(this, mangaId, sourceId))
+                        finish()
+                    },
+                )
             }
         }
     }

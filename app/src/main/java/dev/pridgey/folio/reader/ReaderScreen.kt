@@ -46,6 +46,7 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import dev.pridgey.folio.ui.theme.CoverAccent
 import dev.pridgey.folio.ui.screens.ChapterExplorerSheet
@@ -119,13 +120,25 @@ import me.saket.telephoto.zoomable.rememberZoomableImageState
 import me.saket.telephoto.zoomable.rememberZoomableState
 
 @Composable
-fun ReaderScreen(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, onChromeVisible: (Boolean) -> Unit) {
+fun ReaderScreen(
+    vm: ReaderViewModel,
+    pageKeys: Flow<Int>,
+    onExit: () -> Unit,
+    onChromeVisible: (Boolean) -> Unit,
+    onOpenTitle: (mangaId: Long, sourceId: Long) -> Unit = { _, _ -> },
+) {
     val manga = vm.state.collectAsStateWithLifecycle().value.manga
-    CoverAccent(manga?.sourceId ?: 0L, manga?.thumbnailUrl) { ReaderBody(vm, pageKeys, onExit, onChromeVisible) }
+    CoverAccent(manga?.sourceId ?: 0L, manga?.thumbnailUrl) { ReaderBody(vm, pageKeys, onExit, onChromeVisible, onOpenTitle) }
 }
 
 @Composable
-private fun ReaderBody(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, onChromeVisible: (Boolean) -> Unit) {
+private fun ReaderBody(
+    vm: ReaderViewModel,
+    pageKeys: Flow<Int>,
+    onExit: () -> Unit,
+    onChromeVisible: (Boolean) -> Unit,
+    onOpenTitle: (mangaId: Long, sourceId: Long) -> Unit,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by Graph.settings.values.collectAsStateWithLifecycle()
     var chrome by remember { mutableStateOf(false) }
@@ -179,6 +192,7 @@ private fun ReaderBody(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> U
             visible = chrome, state = state, vm = vm, onExit = onExit,
             onSettings = { sheet = true },
             onChapters = { explorer = true },
+            onTitle = { state.manga?.let { onOpenTitle(it.id, it.sourceId) } },
             onBookmark = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 vm.toggleBookmark()
@@ -498,6 +512,7 @@ private fun ReaderChrome(
     onExit: () -> Unit,
     onSettings: () -> Unit,
     onChapters: () -> Unit,
+    onTitle: () -> Unit,
     onBookmark: () -> Unit,
 ) {
     val glass = Color(0xFF141416).copy(alpha = 0.86f)
@@ -509,8 +524,12 @@ private fun ReaderChrome(
             ) {
                 CircleButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onExit, background = Color.White.copy(alpha = 0.1f), tint = Color.White)
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(state.manga?.title.orEmpty(), style = Folio.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Tapping the title opens the title's page.
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).pressable(onClick = onTitle, pressedScale = 0.98f).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(state.manga?.title.orEmpty(), style = Folio.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Open title", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(start = 4.dp).size(12.dp))
+                    }
                     Text(state.current?.name.orEmpty(), style = Folio.type.headline, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 CircleButton(

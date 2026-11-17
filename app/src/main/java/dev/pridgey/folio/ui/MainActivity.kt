@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     sealed interface Launch {
         data class Tab(val tab: String) : Launch
         data class Link(val url: String) : Launch
+        data class Title(val mangaId: Long, val sourceId: Long) : Launch
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +79,9 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         intent ?: return
         intent.getStringExtra(EXTRA_TAB)?.let { pending.value = Launch.Tab(it) }
+        if (intent.hasExtra(EXTRA_TITLE_MANGA)) {
+            pending.value = Launch.Title(intent.getLongExtra(EXTRA_TITLE_MANGA, 0), intent.getLongExtra(EXTRA_TITLE_SOURCE, 0))
+        }
         val link = when (intent.action) {
             Intent.ACTION_VIEW -> intent.dataString
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let { Regex("""https?://\S+""").find(it)?.value }
@@ -88,6 +92,15 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TAB = "tab"
+        const val EXTRA_TITLE_MANGA = "titleManga"
+        const val EXTRA_TITLE_SOURCE = "titleSource"
+
+        /** Opens a title's page in the main screen (from the reader). */
+        fun titleIntent(context: android.content.Context, mangaId: Long, sourceId: Long): Intent =
+            Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_TITLE_MANGA, mangaId)
+                .putExtra(EXTRA_TITLE_SOURCE, sourceId)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         const val TAB_LIBRARY = "library"
         const val TAB_UPDATES = "updates"
         const val TAB_DISCOVER = "discover"

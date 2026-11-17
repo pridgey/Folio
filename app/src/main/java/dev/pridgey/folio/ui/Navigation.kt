@@ -30,6 +30,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.toRoute
 import dev.pridgey.folio.Graph
 import dev.pridgey.folio.reader.ReaderActivity
@@ -116,9 +117,20 @@ fun FolioNavHost(activity: MainActivity) {
     val launch by activity.pending
 
     LaunchedEffect(launch) {
-        val l = launch as? MainActivity.Launch.Link ?: return@LaunchedEffect
-        activity.pending.value = null
-        openLink(nav, l.url)
+        when (val l = launch) {
+            is MainActivity.Launch.Link -> {
+                activity.pending.value = null
+                openLink(nav, l.url)
+            }
+            is MainActivity.Launch.Title -> {
+                activity.pending.value = null
+                // Already on that title's page (the reader was opened from it): just show it.
+                val top = controller.currentBackStackEntry
+                val showing = top?.destination?.hasRoute<Routes.Details>() == true && top.toRoute<Routes.Details>().mangaId == l.mangaId
+                if (!showing) controller.navigate(Routes.Details(l.mangaId, l.sourceId))
+            }
+            else -> Unit
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Folio.colors.background)) {
