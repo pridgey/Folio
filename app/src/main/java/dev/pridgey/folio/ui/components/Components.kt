@@ -83,6 +83,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -513,6 +514,8 @@ fun SearchField(
     onSubmit: () -> Unit = {},
     readOnly: Boolean = false,
     onClick: (() -> Unit)? = null,
+    icon: ImageVector = Icons.Rounded.Search,
+    keyboardType: KeyboardType = KeyboardType.Text,
 ) {
     val c = Folio.colors
     Row(
@@ -524,7 +527,7 @@ fun SearchField(
             .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = c.secondaryLabel, modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = c.secondaryLabel, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(6.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.isEmpty()) Text(placeholder, style = Folio.type.body, color = c.secondaryLabel, maxLines = 1)
@@ -536,7 +539,7 @@ fun SearchField(
                     readOnly = readOnly,
                     textStyle = Folio.type.body.copy(color = c.label),
                     cursorBrush = SolidColor(c.accent),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
                     modifier = Modifier.fillMaxWidth().then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
                 )

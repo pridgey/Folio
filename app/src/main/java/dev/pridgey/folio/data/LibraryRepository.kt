@@ -115,6 +115,18 @@ class LibraryRepository(
         if (idx >= 0) chapters.setRead(list.take(idx + 1).map { it.id }, true)
     }
 
+    /**
+     * Makes [chapterId] the place to continue from: everything before it (in reading order) is read,
+     * and it and everything after start fresh.
+     */
+    suspend fun continueFrom(mangaId: Long, chapterId: Long) {
+        val list = readingOrder(chapters.forManga(mangaId))
+        val idx = list.indexOfFirst { it.id == chapterId }
+        if (idx < 0) return
+        list.take(idx).map { it.id }.chunked(500).forEach { chapters.setRead(it, true) }
+        list.drop(idx).map { it.id }.chunked(500).forEach { chapters.resetProgress(it) }
+    }
+
     /** The chapter to open when the user taps Read/Continue. */
     fun nextToRead(list: List<ChapterEntity>): ChapterEntity? {
         val ordered = readingOrder(list)

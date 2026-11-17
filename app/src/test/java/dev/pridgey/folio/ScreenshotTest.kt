@@ -147,6 +147,35 @@ class ScreenshotTest {
         shoot("sources_light", false) { SourcesScreen() }
     }
 
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    @Test fun chapterExplorer() {
+        // A long series where the reader has wandered: read to 92, peeked at 140 and 141.
+        val chapters = (1..187).map { n ->
+            ChapterEntity(
+                id = 10_000L + n, mangaId = 1, url = "/x/$n", name = "Chapter $n" + if (n % 9 == 0) " – Harbor Lights" else "",
+                number = n.toFloat(), sourceOrder = 187 - n, dateUpload = System.currentTimeMillis() - (187 - n) * 7L * 86_400_000,
+                read = n <= 92, bookmark = n == 47 || n == 88,
+                lastPageRead = when (n) { 140 -> 6; 141 -> 2; else -> 0 }, pageCount = if (n in 140..141) 24 else 0,
+                lastReadAt = when (n) { 141 -> 2000L; 140 -> 1000L; else -> 0L },
+            )
+        }
+        compose.setContent {
+            val controller = rememberNavController()
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            FolioTheme(ThemeMode.DARK, Graph.settings.current.accent) {
+                CompositionLocalProvider(LocalNav provides Nav(controller, context, scope)) {
+                    dev.pridgey.folio.ui.screens.ChapterExplorerSheet(1, MangaDexSource.ID, chapters, onRead = {}, onDismiss = {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        Thread.sleep(400)
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        com.github.takahirom.roborazzi.captureScreenRoboImage("screenshots/explorer_dark.png")
+    }
+
     @Test fun onboarding() {
         shoot("onboarding_dark", true) { OnboardingScreen {} }
     }

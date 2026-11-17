@@ -46,6 +46,8 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import dev.pridgey.folio.ui.screens.ChapterExplorerSheet
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
@@ -120,6 +122,7 @@ fun ReaderScreen(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, o
     val settings by Graph.settings.values.collectAsStateWithLifecycle()
     var chrome by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
+    var explorer by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(chrome) { onChromeVisible(chrome) }
     BackHandler(chrome) { chrome = false }
@@ -167,6 +170,7 @@ fun ReaderScreen(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, o
         ReaderChrome(
             visible = chrome, state = state, vm = vm, onExit = onExit,
             onSettings = { sheet = true },
+            onChapters = { explorer = true },
             onBookmark = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 vm.toggleBookmark()
@@ -176,6 +180,17 @@ fun ReaderScreen(vm: ReaderViewModel, pageKeys: Flow<Int>, onExit: () -> Unit, o
     }
 
     if (sheet) ReaderSettingsSheet(vm, state, onDismiss = { sheet = false })
+    val manga = state.manga
+    if (explorer && manga != null) {
+        val chapters by remember(manga.id) { Graph.library.observeChapters(manga.id) }.collectAsStateWithLifecycle(null)
+        chapters?.takeIf { it.isNotEmpty() }?.let { list ->
+            ChapterExplorerSheet(
+                mangaId = manga.id, sourceId = manga.sourceId, chapters = list, readingNowId = state.current?.id,
+                onRead = { ch -> explorer = false; chrome = false; vm.goTo(ch) },
+                onDismiss = { explorer = false },
+            )
+        }
+    }
 }
 
 // ------------------------------------------------------------------ Paged
@@ -474,6 +489,7 @@ private fun ReaderChrome(
     vm: ReaderViewModel,
     onExit: () -> Unit,
     onSettings: () -> Unit,
+    onChapters: () -> Unit,
     onBookmark: () -> Unit,
 ) {
     val glass = Color(0xFF141416).copy(alpha = 0.86f)
@@ -493,6 +509,8 @@ private fun ReaderChrome(
                     if (state.current?.bookmark == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "Bookmark", onBookmark,
                     background = Color.White.copy(alpha = 0.1f), tint = if (state.current?.bookmark == true) Folio.colors.accent else Color.White,
                 )
+                Spacer(Modifier.width(8.dp))
+                CircleButton(Icons.Rounded.GridView, "Chapters", onChapters, background = Color.White.copy(alpha = 0.1f), tint = Color.White)
                 Spacer(Modifier.width(8.dp))
                 CircleButton(Icons.Rounded.Tune, "Reader settings", onSettings, background = Color.White.copy(alpha = 0.1f), tint = Color.White)
             }

@@ -36,6 +36,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import dev.pridgey.folio.ui.components.TintedButton
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
@@ -232,6 +234,7 @@ fun DetailsScreen(route: Routes.Details) {
     val density = LocalDensity.current
     val collapsed by remember { derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > with(density) { 300.dp.toPx() } } }
     val selecting = selection.isNotEmpty()
+    var exploring by remember { mutableStateOf(false) }
     BackHandler(selecting) { vm.clearSelection() }
 
     val title = manga?.title ?: ""
@@ -324,6 +327,7 @@ fun DetailsScreen(route: Routes.Details) {
                         onSort = vm::toggleSort, onFilter = { vm.filter.value = it },
                         onMarkAllRead = { all?.let { vm.markRead(it.map { ch -> ch.id }, true) } },
                         onSelectAll = vm::selectAll,
+                        onExplore = { if (!all.isNullOrEmpty()) exploring = true },
                     )
                 }
 
@@ -403,6 +407,10 @@ fun DetailsScreen(route: Routes.Details) {
                             )
                         }
                         DropdownMenuItem(
+                            text = { Text("Explore chapters") }, leadingIcon = { Icon(Icons.Rounded.GridView, null) },
+                            onClick = { menu = false; if (!all.isNullOrEmpty()) exploring = true },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Select chapters") }, leadingIcon = { Icon(Icons.Rounded.CheckCircle, null) },
                             onClick = { menu = false; vm.selectAll() },
                         )
@@ -432,6 +440,16 @@ fun DetailsScreen(route: Routes.Details) {
                 BulkAction("Download", Icons.Rounded.Download) { vm.download(selection) }
                 BulkAction("Delete", Icons.Rounded.DeleteOutline) { vm.deleteDownloads(selection) }
             }
+        }
+    }
+
+    if (exploring) {
+        all?.let { list ->
+            ChapterExplorerSheet(
+                mangaId = route.mangaId, sourceId = sourceId, chapters = list,
+                onRead = { ch -> exploring = false; nav.read(route.mangaId, ch.id) },
+                onDismiss = { exploring = false },
+            )
         }
     }
 }
@@ -534,6 +552,7 @@ private fun ChapterHeader(
     onFilter: (ChapterFilter) -> Unit,
     onMarkAllRead: () -> Unit,
     onSelectAll: () -> Unit,
+    onExplore: () -> Unit,
 ) {
     val c = Folio.colors
     var menu by remember { mutableStateOf(false) }
@@ -543,6 +562,8 @@ private fun ChapterHeader(
             Text(if (count == null) "Chapters" else Format.plural(count, "Chapter"), style = Folio.type.title3, color = c.label)
             if (filter != ChapterFilter.ALL) Text(filter.label, style = Folio.type.footnote, color = c.accent)
         }
+        TintedButton("Explore", onExplore, icon = Icons.Rounded.GridView)
+        Spacer(Modifier.width(8.dp))
         CircleButton(Icons.Rounded.SwapVert, if (descending) "Newest first" else "Oldest first", onSort, modifier = Modifier.graphicsLayer { rotationX = rotation })
         Spacer(Modifier.width(8.dp))
         Box {
