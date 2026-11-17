@@ -58,6 +58,13 @@
             android:exported="false"
             android:theme="@style/Theme.Folio.Reader" />
 
+        <activity
+            android:name=".ui.CrashActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:process=":crash"
+            android:theme="@style/Theme.Folio" />
+
         <receiver
             android:name=".update.UpdateReceiver"
             android:exported="false" />

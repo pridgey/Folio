@@ -18,7 +18,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.addSingleton
-import uy.kohesive.injekt.api.fullType
+import uy.kohesive.injekt.api.TypeReference
+import java.lang.reflect.Type
 
 /** The app's long-lived objects. Built once in [FolioApp.onCreate]. */
 object Graph {
@@ -54,11 +55,12 @@ object Graph {
         this.app = app
         network = NetworkHelper(app)
 
-        // Extensions look these up through Injekt by their exact types.
-        Injekt.addSingleton(fullType<Application>(), app)
-        Injekt.addSingleton(fullType<NetworkHelper>(), network)
-        Injekt.addSingleton(fullType<Json>(), json)
-        Injekt.addSingleton(fullType<ProtoBuf>(), ProtoBuf)
+        // Extensions look these up through Injekt by their exact types. The keys are plain classes
+        // rather than fullType<T>(): that reads a generic signature which R8 strips in release builds.
+        Injekt.addSingleton(typeOf(Application::class.java), app)
+        Injekt.addSingleton(typeOf(NetworkHelper::class.java), network)
+        Injekt.addSingleton(typeOf(Json::class.java), json)
+        Injekt.addSingleton(typeOf(ProtoBuf::class.java), ProtoBuf)
 
         settings = Settings(app)
         db = FolioDatabase.create(app)
@@ -67,4 +69,8 @@ object Graph {
         library = LibraryRepository(db, sources, json)
         downloads = Downloads(app, db, sources, library)
     }
+}
+
+private fun <T> typeOf(type: Class<T>): TypeReference<T> = object : TypeReference<T> {
+    override val type: Type = type
 }

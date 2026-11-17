@@ -15,10 +15,13 @@ import dev.pridgey.folio.work.Notifications
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toOkioPath
 
-class FolioApp : Application(), SingletonImageLoader.Factory {
+open class FolioApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
+        // The crash screen's process only shows a report; it doesn't start the app.
+        if (CrashReporter.isCrashProcess()) return
         Graph.init(this)
         Notifications.createChannels(this)
         Graph.scope.launch {
