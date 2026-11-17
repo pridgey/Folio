@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- back page -->
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55"
+        android:pathData="M54,36 C60,32 68,31 75,32.5 C76.4,32.8 77.4,34 77.4,35.4 L77.4,71.6 C77.4,73.4 75.8,74.7 74,74.4 C67.5,73.3 60.4,74.4 54,78 Z" />
+    <!-- front page -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,36 C48,32 40,31 33,32.5 C31.6,32.8 30.6,34 30.6,35.4 L30.6,71.6 C30.6,73.4 32.2,74.7 34,74.4 C40.5,73.3 47.6,74.4 54,78 Z" />
+    <!-- a panel line on the front page -->
+    <path android:fillColor="#E2382A" android:fillAlpha="0.85"
+        android:pathData="M36,43.5 C40.5,42.6 45,42.9 49,44.2 L49,47 C45,45.8 40.5,45.5 36,46.3 Z" />
+    <path android:fillColor="#E2382A" android:fillAlpha="0.45"
+        android:pathData="M36,50.5 C40.5,49.6 45,49.9 49,51.2 L49,54 C45,52.8 40.5,52.5 36,53.3 Z" />
+</vector>

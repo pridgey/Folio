@@ -1,0 +1,10 @@
+Folio
+Copyright 2026 Taylor Pridgen
+
+Folio implements the Tachiyomi extension API (package eu.kanade.tachiyomi) so that it can load
+extensions published by Keiyoushi (https://github.com/keiyoushi/extensions-source). The API's shape
+follows keiyoushi/extensions-lib and Mihon (https://github.com/mihonapp/mihon), both licensed under
+the Apache License 2.0. Extensions are downloaded at runtime; none are bundled.
+
+The Inter typeface is by The Inter Project Authors, licensed under the SIL Open Font License 1.1
+(see licenses/Inter-OFL.txt).

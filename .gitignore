@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+.kotlin/
+*.jks
+*.keystore
+
+# Local-only outputs
+/app/src/test/snapshots/
+/verify/
+/app/screenshots/
