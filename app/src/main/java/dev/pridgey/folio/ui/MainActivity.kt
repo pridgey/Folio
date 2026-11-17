@@ -12,6 +12,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import dev.pridgey.folio.CrashReporter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import dev.pridgey.folio.Graph
 import dev.pridgey.folio.data.ThemeMode
 import dev.pridgey.folio.ui.theme.FolioTheme
@@ -49,6 +54,20 @@ class MainActivity : ComponentActivity() {
             }
         }
         Updater.checkIfDue(this)
+        if (savedInstanceState == null) showPreviousCrash()
+    }
+
+    /** If the last run ended badly in a way the crash screen couldn't catch, show its report now. */
+    private fun showPreviousCrash() {
+        lifecycleScope.launch {
+            val report = withContext(Dispatchers.IO) { runCatching { CrashReporter.previousRunReport(this@MainActivity) }.getOrNull() }
+                ?: return@launch
+            startActivity(
+                Intent(this@MainActivity, CrashActivity::class.java)
+                    .putExtra(CrashReporter.EXTRA_REPORT, report)
+                    .putExtra(CrashReporter.EXTRA_PREVIOUS, true),
+            )
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

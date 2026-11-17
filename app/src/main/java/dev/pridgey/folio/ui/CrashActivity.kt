@@ -49,16 +49,19 @@ class CrashActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val report = intent.getStringExtra(CrashReporter.EXTRA_REPORT) ?: "No report was saved."
+        val previous = intent.getBooleanExtra(CrashReporter.EXTRA_PREVIOUS, false)
+        if (!previous) CrashReporter.markSeen(this)
         setContent {
             FolioTheme(ThemeMode.SYSTEM, Accent.PERSIMMON) {
                 val c = Folio.colors
                 Column(Modifier.fillMaxSize().background(c.background).safeDrawingPadding().padding(20.dp)) {
                     Icon(Icons.Rounded.WarningAmber, null, tint = c.accent, modifier = Modifier.size(40.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("Folio stopped", style = Folio.type.largeTitle, color = c.label)
+                    Text(if (previous) "Folio closed unexpectedly" else "Folio stopped", style = Folio.type.largeTitle, color = c.label)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Something went wrong. Sharing this report shows exactly where, so it can be fixed.",
+                        if (previous) "The last time Folio was open, it ended abruptly. Sharing this report shows why, so it can be fixed."
+                        else "Something went wrong. Sharing this report shows exactly where, so it can be fixed.",
                         style = Folio.type.callout,
                         color = c.secondaryLabel,
                     )
