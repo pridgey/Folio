@@ -5,7 +5,10 @@ package dev.pridgey.folio.ui.components
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Image
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -107,7 +110,13 @@ val LocalNavScope = compositionLocalOf<AnimatedContentScope?> { null }
 fun ProvideNavScope(scope: AnimatedContentScope, content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalNavScope provides scope, content = content)
 
-/** Lets a cover fly between screens. */
+/** How long a screen takes to push or pop. Flying covers use the same timing so both land together. */
+const val NAV_MS = 340
+
+/**
+ * Lets a cover fly between screens. The cover draws above both screens while it flies, so chrome that
+ * should stay on top of it uses [aboveSharedCovers].
+ */
 @Composable
 fun Modifier.sharedCover(key: String?): Modifier {
     val shared = LocalSharedScope.current
@@ -117,8 +126,26 @@ fun Modifier.sharedCover(key: String?): Modifier {
         this@sharedCover.sharedElement(
             sharedContentState = rememberSharedContentState("cover:$key"),
             animatedVisibilityScope = nav,
-            boundsTransform = { _, _ -> spring(dampingRatio = 0.86f, stiffness = 380f) },
+            // A tween, not a spring: it ends exactly when the screens do, and tracks a predictive back swipe.
+            boundsTransform = { _, _ -> tween(NAV_MS, easing = FastOutSlowInEasing) },
         )
+    }
+}
+
+/**
+ * Keeps chrome (bars, scrims, titles) above a flying cover. While a cover flies, this element moves into
+ * the same overlay at a higher [z], fading with its screen since the screen's own fade no longer reaches it.
+ */
+@Composable
+fun Modifier.aboveSharedCovers(z: Float = 1f): Modifier {
+    val shared = LocalSharedScope.current
+    val nav = LocalNavScope.current
+    if (shared == null || nav == null) return this
+    val alpha by nav.transition.animateFloat(transitionSpec = { tween(NAV_MS) }, label = "chrome") { if (it == EnterExitState.Visible) 1f else 0f }
+    return with(shared) {
+        this@aboveSharedCovers
+            .renderInSharedTransitionScopeOverlay(zIndexInOverlay = z)
+            .graphicsLayer { this.alpha = if (shared.isTransitionActive) alpha else 1f }
     }
 }
 
@@ -194,20 +221,34 @@ fun Cover(
         if (url != null) {
             val context = LocalContext.current
             val request = remember(sourceId, url) {
-                ImageRequest.Builder(context).data(CoverModel(sourceId, url)).memoryCacheKey("cover:$sourceId:$url").build()
+                ImageRequest.Builder(context).data(CoverModel(sourceId, url)).coverCacheKeys(sourceId, url).build()
             }
             SubcomposeAsyncImage(
                 model = request,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                loading = { CoverPlaceholder(title, shimmer = true) },
+                // Show the copy already in memory (e.g. the big one from the title page) while this size loads.
+                loading = { state ->
+                    val held = state.painter
+                    if (held != null) Image(held, title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    else CoverPlaceholder(title, shimmer = true)
+                },
                 error = { CoverPlaceholder(title, shimmer = false) },
             )
         } else {
             CoverPlaceholder(title, shimmer = false)
         }
     }
+}
+
+/**
+ * Every view of a cover shares one memory-cache entry, and shows whatever copy is there while its own
+ * size loads. Without the placeholder a flying cover is a blank box until the new size decodes.
+ */
+fun ImageRequest.Builder.coverCacheKeys(sourceId: Long, url: String): ImageRequest.Builder {
+    val key = "cover:$sourceId:$url"
+    return memoryCacheKey(key).placeholderMemoryCacheKey(key)
 }
 
 @Composable
@@ -576,6 +617,7 @@ fun TopBar(
     val fill by animateFloatAsState(if (showDivider) 1f else 0f, tween(220), label = "fill")
     Row(
         modifier
+            .aboveSharedCovers(z = 2f)
             .fillMaxWidth()
             .drawBehind { if (fill > 0f) drawRect(c.background.copy(alpha = 0.97f * fill)) }
             .windowInsetsPadding(WindowInsets.statusBars)
@@ -617,7 +659,7 @@ data class TabItem(val key: String, val label: String, val icon: ImageVector, va
 fun TabBar(tabs: List<TabItem>, selected: String, onSelect: (String) -> Unit, glass: GlassState, modifier: Modifier = Modifier) {
     val c = Folio.colors
     val haptics = LocalHapticFeedback.current
-    Box(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Box(modifier.aboveSharedCovers(z = 2f).fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 14.dp, vertical = 10.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()

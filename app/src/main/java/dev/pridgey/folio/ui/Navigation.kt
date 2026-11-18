@@ -36,6 +36,7 @@ import dev.pridgey.folio.Graph
 import dev.pridgey.folio.reader.ReaderActivity
 import dev.pridgey.folio.source.MangaDexSource
 import dev.pridgey.folio.ui.components.LocalSharedScope
+import dev.pridgey.folio.ui.components.NAV_MS
 import dev.pridgey.folio.ui.components.ProvideNavScope
 import dev.pridgey.folio.ui.screens.BrowseScreen
 import dev.pridgey.folio.ui.screens.ChallengeSheet
@@ -105,7 +106,7 @@ class Nav(private val controller: NavHostController, private val context: Contex
 
 val LocalNav = staticCompositionLocalOf<Nav> { error("No Nav") }
 
-private const val PUSH_MS = 340
+private const val PUSH_MS = NAV_MS
 
 @Composable
 fun FolioNavHost(activity: MainActivity) {

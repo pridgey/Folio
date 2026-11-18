@@ -69,6 +69,7 @@ import dev.pridgey.folio.ui.components.BottomBarSpacer
 import dev.pridgey.folio.ui.components.Chip
 import dev.pridgey.folio.ui.components.CircleButton
 import dev.pridgey.folio.ui.components.Cover
+import dev.pridgey.folio.ui.components.coverCacheKeys
 import dev.pridgey.folio.ui.components.GlassState
 import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.LargeTitle
@@ -266,7 +267,7 @@ private fun Hero(sourceId: Long, items: List<SManga>) {
             ) {
                 manga.thumbnail_url?.let { url ->
                     AsyncImage(
-                        model = ImageRequest.Builder(context).data(CoverModel(sourceId, url)).memoryCacheKey("cover:$sourceId:$url").build(),
+                        model = ImageRequest.Builder(context).data(CoverModel(sourceId, url)).coverCacheKeys(sourceId, url).build(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize().blur(40.dp).graphicsLayer { alpha = 0.9f; scaleX = 1.3f; scaleY = 1.3f },

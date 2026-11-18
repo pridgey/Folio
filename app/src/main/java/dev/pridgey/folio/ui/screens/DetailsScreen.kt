@@ -40,6 +40,8 @@ import androidx.compose.foundation.border
 import dev.pridgey.folio.ui.theme.rememberCoverColor
 import dev.pridgey.folio.ui.theme.CoverTint
 import dev.pridgey.folio.ui.theme.CoverAccent
+import dev.pridgey.folio.ui.components.aboveSharedCovers
+import dev.pridgey.folio.ui.components.coverCacheKeys
 import dev.pridgey.folio.ui.components.sharedCover
 import dev.pridgey.folio.ui.components.TintedButton
 import androidx.compose.material.icons.rounded.GridView
@@ -478,7 +480,7 @@ private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEnti
         Box(Modifier.fillMaxWidth().height(artHeight).sharedCover(coverKey).background(c.placeholder)) {
             if (cover != null) {
                 AsyncImage(
-                    model = ImageRequest.Builder(context).data(CoverModel(sourceId, cover)).memoryCacheKey("cover:$sourceId:$cover").build(),
+                    model = ImageRequest.Builder(context).data(CoverModel(sourceId, cover)).coverCacheKeys(sourceId, cover).build(),
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.TopCenter,
@@ -486,33 +488,36 @@ private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEnti
                 )
             }
         }
-        // Keeps the bar's buttons readable over any art.
-        Box(Modifier.fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(c.background.copy(alpha = 0.7f), Color.Transparent))))
-        // Art dissolves through the cover's own colour into the page.
-        Box(
-            Modifier.fillMaxWidth().height(artHeight).background(
-                Brush.verticalGradient(
-                    0f to Color.Transparent, 0.4f to Color.Transparent,
-                    0.72f to backdrop.copy(alpha = 0.72f), 0.9f to c.background.copy(alpha = 0.96f), 1f to c.background,
+        // Scrims and the title sit above the cover even while it flies in or out.
+        Box(Modifier.fillMaxWidth().aboveSharedCovers()) {
+            // Keeps the bar's buttons readable over any art.
+            Box(Modifier.fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(c.background.copy(alpha = 0.7f), Color.Transparent))))
+            // Art dissolves through the cover's own colour into the page.
+            Box(
+                Modifier.fillMaxWidth().height(artHeight).background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent, 0.4f to Color.Transparent,
+                        0.72f to backdrop.copy(alpha = 0.72f), 0.9f to c.background.copy(alpha = 0.96f), 1f to c.background,
+                    ),
                 ),
-            ),
-        )
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-            Spacer(Modifier.height(318.dp))
-            val meta = listOfNotNull(
-                manga?.status?.let { Format.status(it) },
-                Graph.sources.nameOf(sourceId),
-                chapterCount?.takeIf { it > 0 }?.let { Format.plural(it, "chapter") },
-            ).joinToString("  ·  ")
-            Text(meta.uppercase(), style = Folio.type.eyebrow, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(8.dp))
-            Text(title, style = Folio.type.largeTitle, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
-            val people = listOfNotNull(manga?.author, manga?.artist?.takeIf { it != manga.author }).joinToString(" · ")
-            if (people.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(people, style = Folio.type.subhead, color = c.secondaryLabel, maxLines = 2)
+            )
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                Spacer(Modifier.height(318.dp))
+                val meta = listOfNotNull(
+                    manga?.status?.let { Format.status(it) },
+                    Graph.sources.nameOf(sourceId),
+                    chapterCount?.takeIf { it > 0 }?.let { Format.plural(it, "chapter") },
+                ).joinToString("  ·  ")
+                Text(meta.uppercase(), style = Folio.type.eyebrow, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(8.dp))
+                Text(title, style = Folio.type.largeTitle, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                val people = listOfNotNull(manga?.author, manga?.artist?.takeIf { it != manga.author }).joinToString(" · ")
+                if (people.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(people, style = Folio.type.subhead, color = c.secondaryLabel, maxLines = 2)
+                }
+                Spacer(Modifier.height(22.dp))
             }
-            Spacer(Modifier.height(22.dp))
         }
     }
 }
