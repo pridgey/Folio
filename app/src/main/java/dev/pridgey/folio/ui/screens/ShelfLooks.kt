@@ -118,6 +118,7 @@ internal abstract class ShelfLook {
 }
 
 internal fun lookFor(style: ShelfStyle): ShelfLook = when (style) {
+    ShelfStyle.ASSORTED -> AssortedLook
     ShelfStyle.GALLERY -> GalleryLook()
     ShelfStyle.OBI -> ObiLook
     ShelfStyle.CLOSE_UP -> CloseUpLook
@@ -199,6 +200,7 @@ internal fun SpineTitle(
     max: TextUnit,
     modifier: Modifier = Modifier,
     min: TextUnit = 7.5.sp,
+    up: Boolean = false,
 ) {
     BasicText(
         text,
@@ -206,7 +208,7 @@ internal fun SpineTitle(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         autoSize = TextAutoSize.StepBased(minFontSize = if (min.value <= max.value) min else max, maxFontSize = max, stepSize = 0.5.sp),
-        modifier = modifier.downward(),
+        modifier = if (up) modifier.upward() else modifier.downward(),
     )
 }
 

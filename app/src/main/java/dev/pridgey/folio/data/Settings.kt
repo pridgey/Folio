@@ -34,6 +34,7 @@ enum class DownloadPace(val label: String, val gapMs: Long) { FAST("Fast", 0), B
 
 /** How the bookcase is drawn. */
 enum class ShelfStyle(val label: String, val blurb: String) {
+    ASSORTED("Assorted", "Every book its own: art, finish, type and title vary"),
     GALLERY("Gallery", "A slice of the cover, titled at the foot"),
     OBI("Obi", "Wrapped in a paper band, like a new volume"),
     CLOSE_UP("Close-up", "Zoomed in on the cover's faces, titled from the head"),
@@ -97,7 +98,7 @@ class Settings(context: Context) {
         val libraryColumns: Int = 3,
         /** Library as spines on a bookcase instead of a cover grid. */
         val bookcase: Boolean = false,
-        val shelfStyle: ShelfStyle = ShelfStyle.GALLERY,
+        val shelfStyle: ShelfStyle = ShelfStyle.ASSORTED,
         val onboarded: Boolean = false,
         val lastUpdatesSeen: Long = 0,
     )

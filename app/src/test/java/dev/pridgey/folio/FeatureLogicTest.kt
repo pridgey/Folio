@@ -129,4 +129,26 @@ class FeatureLogicTest {
         }
         assertTrue(dev.pridgey.folio.ui.screens.Spines.width(0) < dev.pridgey.folio.ui.screens.Spines.width(300))
     }
+
+    @Test fun spineRecipesAreSteadyPerTitle() {
+        fun book(id: Long, title: String) = dev.pridgey.folio.data.LibraryItem(id, 1, title, null, 0, 10, 0, 0, 0, 0, null)
+        val S = dev.pridgey.folio.ui.screens.Spines
+        // The same title gets the same seed, whatever its id or source, and the same recipe every time.
+        assertEquals(S.seed(book(1, "One Piece")), S.seed(book(99, " one piece ")))
+        val seed = S.seed(book(1, "One Piece"))
+        assertEquals(dev.pridgey.folio.ui.screens.recipeFor(seed), dev.pridgey.folio.ui.screens.recipeFor(seed))
+        assertEquals(S.height(seed), S.height(S.seed(book(5, "One Piece"))))
+    }
+
+    @Test fun spineRecipesUseEveryVariation() {
+        val recipes = (0L until 3000L).map { dev.pridgey.folio.ui.screens.recipeFor(it * 7919) }
+        dev.pridgey.folio.ui.screens.ArtFrame.entries.forEach { f -> assertTrue("$f", recipes.any { it.frame == f }) }
+        dev.pridgey.folio.ui.screens.Finish.entries.forEach { f -> assertTrue("$f", recipes.any { it.finish == f }) }
+        dev.pridgey.folio.ui.screens.TitleSpot.entries.forEach { s -> assertTrue("$s", recipes.any { it.spot == s }) }
+        assertTrue(recipes.any { it.up } && recipes.any { !it.up })
+        // Most books stay plain; the finishes are accents.
+        assertTrue(recipes.count { it.finish == dev.pridgey.folio.ui.screens.Finish.PLAIN } > recipes.size * 0.6)
+        // A sideways cover always keeps its title in the band, clear of the logo.
+        assertTrue(recipes.filter { it.frame == dev.pridgey.folio.ui.screens.ArtFrame.SIDEWAYS }.all { it.spot == dev.pridgey.folio.ui.screens.TitleSpot.BAND })
+    }
 }

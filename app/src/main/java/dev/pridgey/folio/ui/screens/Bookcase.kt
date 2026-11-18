@@ -89,6 +89,9 @@ internal object Spines {
         return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * t
     }
 
+    /** A seed from the title alone, which survives re-adding a title or moving it to another source. */
+    fun seed(item: LibraryItem): Long = item.title.trim().lowercase().hashCode().toLong() and 0xFFFFFFFFL
+
     fun mix(id: Long, salt: Long): Long = ((id + salt) * 2654435761L) ushr 9
 
     /** Books aren't all the same height (within about a tenth). Steady per title. */
@@ -129,6 +132,8 @@ internal class Book(
     /** The cover's main colour, once known. */
     val cover: Color?,
 ) {
+    /** Steady per title, so a book keeps its look through re-adding or moving sources. */
+    val seed: Long get() = Spines.seed(item)
     val read get() = (item.total - item.unread).coerceAtLeast(0)
     val started get() = read > 0
 }
@@ -173,7 +178,7 @@ internal fun BookcaseShelf(
 
     val books = row.mapIndexed { i, item ->
         key(item.id) {
-            Book(item, i, Spines.width(item.total).dp, Spines.height(item.id).dp, rememberCoverColor(item.sourceId, item.thumbnailUrl))
+            Book(item, i, Spines.width(item.total).dp, Spines.height(Spines.seed(item)).dp, rememberCoverColor(item.sourceId, item.thumbnailUrl))
         }
     }
     // Each book's centre along the row, in px.
@@ -373,10 +378,15 @@ internal fun shelfMeta(item: LibraryItem): String = when {
 }
 
 /** Turns content to run top to bottom, like the title on an English-language spine. */
-internal fun Modifier.downward() = layout { measurable, constraints ->
+internal fun Modifier.downward() = turned(90f)
+
+/** Turns content to run bottom to top, as on many European spines. */
+internal fun Modifier.upward() = turned(-90f)
+
+private fun Modifier.turned(degrees: Float) = layout { measurable, constraints ->
     val p = measurable.measure(Constraints(maxWidth = constraints.maxHeight, maxHeight = constraints.maxWidth))
     layout(p.height, p.width) {
-        p.placeWithLayer((p.height - p.width) / 2, (p.width - p.height) / 2) { rotationZ = 90f }
+        p.placeWithLayer((p.height - p.width) / 2, (p.width - p.height) / 2) { rotationZ = degrees }
     }
 }
 
