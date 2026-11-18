@@ -544,10 +544,19 @@ private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEnti
                 Text(meta.uppercase(), style = Folio.type.eyebrow, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(8.dp))
                 Text(title, style = Folio.type.largeTitle, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                val people = listOfNotNull(manga?.author, manga?.artist?.takeIf { it != manga.author }).joinToString(" · ")
-                if (people.isNotBlank()) {
+                // Each name opens that person's page.
+                val people = listOfNotNull(manga?.author, manga?.artist).flatMap { it.split(',') }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                if (people.isNotEmpty()) {
+                    val nav = LocalNav.current
                     Spacer(Modifier.height(6.dp))
-                    Text(people, style = Folio.type.subhead, color = c.secondaryLabel, maxLines = 2)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        people.forEachIndexed { i, name ->
+                            Text(
+                                name + if (i < people.lastIndex) " ·" else "", style = Folio.type.subhead, color = c.secondaryLabel,
+                                modifier = Modifier.clip(RoundedCornerShape(6.dp)).pressable(onClick = { nav.author(name) }, pressedScale = 0.97f),
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(22.dp))
             }
@@ -604,7 +613,8 @@ private fun About(manga: MangaEntity?) {
         if (genres.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                genres.take(14).forEach { Chip(it) }
+                val nav = LocalNav.current
+                genres.take(14).forEach { g -> Chip(g, onClick = { nav.tagged(g) }) }
             }
         }
     }

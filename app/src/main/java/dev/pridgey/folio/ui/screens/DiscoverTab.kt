@@ -1,5 +1,7 @@
 package dev.pridgey.folio.ui.screens
 
+import androidx.compose.material.icons.rounded.LocalOffer
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -67,9 +69,9 @@ import dev.pridgey.folio.source.SourceManager
 import dev.pridgey.folio.ui.LocalNav
 import dev.pridgey.folio.ui.components.BottomBarSpacer
 import dev.pridgey.folio.ui.components.Chip
+import dev.pridgey.folio.ui.components.coverCacheKeys
 import dev.pridgey.folio.ui.components.CircleButton
 import dev.pridgey.folio.ui.components.Cover
-import dev.pridgey.folio.ui.components.coverCacheKeys
 import dev.pridgey.folio.ui.components.GlassState
 import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.LargeTitle
@@ -103,6 +105,13 @@ class DiscoverViewModel : ViewModel() {
 
     /** The source being shown; null means "the primary one, once it's ready". */
     val selected = MutableStateFlow<Long?>(null)
+
+    /** "Because you read…" shelves, drawn from the library. */
+    val recommendations = MutableStateFlow<List<Recommendation>>(emptyList())
+
+    init {
+        viewModelScope.launch { recommendations.value = runCatching { Recommender.forYou() }.getOrDefault(emptyList()) }
+    }
 
     fun load(sourceId: Long, force: Boolean = false) {
         val current = _feeds.value[sourceId]
@@ -196,11 +205,16 @@ fun DiscoverTab(glass: GlassState, vm: DiscoverViewModel = viewModel()) {
                 }
             }
 
+            item(key = "for-you") {
+                val recs by vm.recommendations.collectAsStateWithLifecycle()
+                BecauseYouRead(recs)
+            }
             item { Shelf("Popular", sourceId, (feed.popular as? Load.Ready)?.value?.drop(6), feed.popular is Load.Loading) { nav.browse(sourceId, "popular") } }
             item { Shelf("Latest Updates", sourceId, (feed.latest as? Load.Ready)?.value, feed.latest is Load.Loading) { nav.browse(sourceId, "latest") } }
             item {
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
-                    Chip("Browse everything with filters", leading = Icons.Rounded.Tune, onClick = { nav.browse(sourceId, "search") })
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                    Chip("Explore tags", leading = Icons.Rounded.LocalOffer, onClick = { nav.tags() })
+                    Chip("Browse with filters", leading = Icons.Rounded.Tune, onClick = { nav.browse(sourceId, "search") })
                 }
             }
             item { BottomBarSpacer() }

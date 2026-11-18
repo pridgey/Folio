@@ -2,6 +2,10 @@
 
 package dev.pridgey.folio.ui.screens
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.flow.first
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -365,6 +369,8 @@ private fun TriChip(name: String, state: Int, onChange: (Int) -> Unit) {
 
 // ------------------------------------------------------------------ Search
 
+enum class SearchKind(val label: String) { TITLES("Titles"), PEOPLE("Authors"), TAGS("Tags") }
+
 class SearchViewModel(initial: String) : ViewModel() {
     var query by mutableStateOf(initial)
     private val _results = MutableStateFlow<Map<Long, Load<List<SManga>>>>(emptyMap())
@@ -374,14 +380,56 @@ class SearchViewModel(initial: String) : ViewModel() {
     var recent by mutableStateOf(prefs.getString("recent", "")!!.split("\n").filter { it.isNotBlank() })
         private set
 
+    /** What the query looks for: titles, people or tags. */
+    var kind by mutableStateOf(SearchKind.TITLES)
+        private set
+    private val _people = MutableStateFlow<Load<List<String>>>(Load.Ready(emptyList()))
+    val people = _people.asStateFlow()
+    private val _tags = MutableStateFlow<List<MangaDexSource.TagInfo>?>(null)
+    val tags = _tags.asStateFlow()
+
     init { if (initial.isNotBlank()) search(debounce = false) }
+
+    fun chooseKind(k: SearchKind) {
+        kind = k
+        search(debounce = false)
+    }
+
+    private fun searchPeople(q: String) {
+        _people.value = Load.Loading
+        job = viewModelScope.launch {
+            delay(350)
+            // Names in the library first, then MangaDex's.
+            val local = Graph.library.byPerson(q).first().flatMap { listOfNotNull(it.author, it.artist) }
+                .flatMap { it.split(',') }.map { it.trim() }.filter { it.contains(q, ignoreCase = true) }
+            val remote = runCatching { Graph.sources.call(MangaDexSource.ID) { Graph.sources.mangaDex.people(q) }.map { it.name } }
+            _people.value = remote.fold(
+                { Load.Ready((local + it).distinctBy { n -> n.lowercase() }) },
+                { e -> if (local.isNotEmpty()) Load.Ready(local.distinct()) else Load.Failed(SourceManager.describe(e)) },
+            )
+        }
+    }
+
+    private fun searchTags(q: String) {
+        job = viewModelScope.launch {
+            val all = runCatching { Graph.sources.mangaDex.tags() }.getOrDefault(emptyList())
+            _tags.value = all.filter { it.name.contains(q, ignoreCase = true) }
+        }
+    }
 
     fun search(debounce: Boolean = true) {
         job?.cancel()
         val q = query.trim()
         if (q.length < 2) {
             _results.value = emptyMap()
+            _people.value = Load.Ready(emptyList())
+            _tags.value = null
             return
+        }
+        when (kind) {
+            SearchKind.PEOPLE -> return searchPeople(q)
+            SearchKind.TAGS -> return searchTags(q)
+            SearchKind.TITLES -> Unit
         }
         job = viewModelScope.launch {
             if (debounce) delay(450)
@@ -431,7 +479,18 @@ fun SearchScreen(initial: String) {
             BarTextButton("Cancel", { nav.back() })
         }
         val sources = listOfNotNull(Graph.sources.primary(), Graph.sources.mangaDex)
-        if (results.isNotEmpty()) {
+        val people by vm.people.collectAsStateWithLifecycle()
+        val tagHits by vm.tags.collectAsStateWithLifecycle()
+        SegmentedControl(SearchKind.entries, vm.kind, { it.label }, vm::chooseKind, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+        if (vm.kind == SearchKind.PEOPLE && vm.query.trim().length >= 2) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { PeopleResults(vm.query, people) }
+            return@Column
+        }
+        if (vm.kind == SearchKind.TAGS && vm.query.trim().length >= 2) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { TagResults(tagHits) }
+            return@Column
+        }
+        if (results.isNotEmpty() && vm.kind == SearchKind.TITLES) {
             SegmentedControl(listOf("All") + sources.map { it.name }, scope, { it }, { scope = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {

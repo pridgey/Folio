@@ -142,6 +142,12 @@ class LibraryRepository(
     // ------------------------------------------------------------------ Status and shelves
 
     suspend fun setReadingStatus(id: Long, status: ReadingStatus) = manga.setReadingStatus(id, status.ordinal)
+    fun byPerson(name: String): Flow<List<MangaEntity>> = manga.byPerson(name)
+
+    /** How often each genre appears across the library, most common first. */
+    suspend fun genreWeights(): List<Pair<String, Int>> =
+        manga.libraryGenres().flatMap { it.split(',') }.map { it.trim() }.filter { it.isNotEmpty() }
+            .groupingBy { it.lowercase() }.eachCount().entries.sortedByDescending { it.value }.map { it.key to it.value }
 
     fun shelves(): Flow<List<ShelfEntity>> = shelfDao.observe()
     fun shelfMembers(): Flow<List<ShelfManga>> = shelfDao.observeMembers()

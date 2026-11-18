@@ -48,6 +48,9 @@ import dev.pridgey.folio.ui.screens.SearchScreen
 import dev.pridgey.folio.ui.screens.SourceSettingsScreen
 import dev.pridgey.folio.ui.screens.SourcesScreen
 import dev.pridgey.folio.ui.screens.WebScreen
+import dev.pridgey.folio.ui.screens.AuthorScreen
+import dev.pridgey.folio.ui.screens.TagExplorerScreen
+import dev.pridgey.folio.ui.screens.TaggedScreen
 import dev.pridgey.folio.ui.theme.Folio
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +67,10 @@ object Routes {
     @Serializable data class SourceSettings(val sourceId: Long)
     @Serializable data object Downloads
     @Serializable data class Web(val url: String, val title: String)
+    @Serializable data object Tags
+    /** Titles carrying all of these tags; names are matched to MangaDex tags. */
+    @Serializable data class Tagged(val names: List<String>)
+    @Serializable data class Author(val name: String)
 }
 
 /** App-wide actions screens use to move around. */
@@ -87,6 +94,9 @@ class Nav(private val controller: NavHostController, private val context: Contex
     fun sourceSettings(sourceId: Long) = controller.navigate(Routes.SourceSettings(sourceId))
     fun downloads() = controller.navigate(Routes.Downloads) { launchSingleTop = true }
     fun web(url: String, title: String) = controller.navigate(Routes.Web(url, title))
+    fun tags() = controller.navigate(Routes.Tags) { launchSingleTop = true }
+    fun tagged(vararg names: String) = controller.navigate(Routes.Tagged(names.toList()))
+    fun author(name: String) = controller.navigate(Routes.Author(name))
 
     fun read(mangaId: Long, chapterId: Long) =
         context.startActivity(ReaderActivity.intent(context, mangaId, chapterId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK.takeIf { context !is android.app.Activity } ?: 0))
@@ -182,6 +192,9 @@ fun FolioNavHost(activity: MainActivity) {
                     composable<Routes.Sources> { SourcesScreen() }
                     composable<Routes.SourceSettings> { entry -> SourceSettingsScreen(entry.toRoute<Routes.SourceSettings>().sourceId) }
                     composable<Routes.Downloads> { DownloadsScreen() }
+                    composable<Routes.Tags> { ProvideNavScope(this) { TagExplorerScreen() } }
+                    composable<Routes.Tagged> { entry -> ProvideNavScope(this) { TaggedScreen(entry.toRoute<Routes.Tagged>().names) } }
+                    composable<Routes.Author> { entry -> ProvideNavScope(this) { AuthorScreen(entry.toRoute<Routes.Author>().name) } }
                     composable<Routes.Web> { entry ->
                         val r = entry.toRoute<Routes.Web>()
                         WebScreen(r.url, r.title)

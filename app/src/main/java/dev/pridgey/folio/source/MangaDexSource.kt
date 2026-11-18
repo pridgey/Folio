@@ -74,6 +74,69 @@ class MangaDexSource(baseClient: OkHttpClient, private val json: Json, private v
         }
     }
 
+    // ------------------------------------------------------------------ Discovery: tags and people
+
+    /** A MangaDex tag. [group] is genre, theme, format or content. */
+    data class TagInfo(val id: String, val name: String, val group: String)
+
+    data class Person(val id: String, val name: String)
+
+    @Volatile private var tagCache: List<TagInfo>? = null
+
+    /** Every tag MangaDex knows, fetched once per run. */
+    suspend fun tags(): List<TagInfo> {
+        tagCache?.let { return it }
+        val body = get<TagList>("$API/manga/tag".toHttpUrl())
+        return body.data.mapNotNull { t ->
+            val name = t.attributes.name["en"] ?: t.attributes.name.values.firstOrNull() ?: return@mapNotNull null
+            TagInfo(t.id, name, t.attributes.group)
+        }.sortedBy { it.name }.also { tagCache = it }
+    }
+
+    /** Matches tag names from any source ("Action", "slice of life") to MangaDex tags. */
+    suspend fun tagsNamed(names: Collection<String>): List<TagInfo> {
+        val wanted = names.map { norm(it) }.toSet()
+        return tags().filter { norm(it.name) in wanted }
+    }
+
+    private fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
+
+    /** Titles carrying every one of [include], most followed first. */
+    suspend fun byTags(include: List<String>, page: Int, exclude: List<String> = emptyList()): MangasPage = list(page) {
+        include.forEach { addQueryParameter("includedTags[]", it) }
+        exclude.forEach { addQueryParameter("excludedTags[]", it) }
+        addQueryParameter("includedTagsMode", "AND")
+        addQueryParameter("order[followedCount]", "desc")
+    }
+
+    /** Authors and artists whose name matches [name]. */
+    suspend fun people(name: String): List<Person> {
+        if (name.isBlank()) return emptyList()
+        val url = "$API/author".toHttpUrl().newBuilder()
+            .addQueryParameter("name", name.trim())
+            .addQueryParameter("limit", "20")
+            .build()
+        return get<PersonList>(url).data.mapNotNull { p -> p.attributes.name?.let { Person(p.id, it) } }
+    }
+
+    /** Everything an author or artist worked on, most followed first. */
+    suspend fun byPerson(personId: String, page: Int): MangasPage = list(page) {
+        addQueryParameter("authorOrArtist", personId)
+        addQueryParameter("order[followedCount]", "desc")
+    }
+
+    @Serializable private class TagList(val data: List<TagData> = emptyList())
+
+    @Serializable private class TagData(val id: String, val attributes: TagDataAttributes)
+
+    @Serializable private class TagDataAttributes(val name: Map<String, String> = emptyMap(), val group: String = "genre")
+
+    @Serializable private class PersonList(val data: List<PersonData> = emptyList())
+
+    @Serializable private class PersonData(val id: String, val attributes: PersonAttributes)
+
+    @Serializable private class PersonAttributes(val name: String? = null)
+
     private suspend fun list(page: Int, configure: HttpUrl.Builder.() -> Unit): MangasPage {
         val limit = 30
         val url = "$API/manga".toHttpUrl().newBuilder().apply {

@@ -40,6 +40,12 @@ interface MangaDao {
     @Query("UPDATE manga SET readingStatus = :status WHERE id = :id")
     suspend fun setReadingStatus(id: Long, status: Int)
 
+    @Query("SELECT * FROM manga WHERE favorite = 1 AND (author LIKE '%' || :name || '%' OR artist LIKE '%' || :name || '%')")
+    fun byPerson(name: String): Flow<List<MangaEntity>>
+
+    @Query("SELECT genres FROM manga WHERE favorite = 1 AND genres IS NOT NULL")
+    suspend fun libraryGenres(): List<String>
+
     @Query("UPDATE manga SET sortDescending = :descending WHERE id = :id")
     suspend fun setSortDescending(id: Long, descending: Boolean)
 
