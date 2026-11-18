@@ -19,6 +19,7 @@ class LibraryRepository(
 ) {
     private val manga = db.manga()
     private val chapters = db.chapters()
+    private val shelfDao = db.shelves()
 
     fun library(): Flow<List<LibraryItem>> = manga.library()
     fun favoriteKeys(): Flow<List<String>> = manga.favoriteKeys()
@@ -138,24 +139,69 @@ class LibraryRepository(
 
     suspend fun pruneUnused() = manga.pruneUnused()
 
+    // ------------------------------------------------------------------ Status and shelves
+
+    suspend fun setReadingStatus(id: Long, status: ReadingStatus) = manga.setReadingStatus(id, status.ordinal)
+
+    fun shelves(): Flow<List<ShelfEntity>> = shelfDao.observe()
+    fun shelfMembers(): Flow<List<ShelfManga>> = shelfDao.observeMembers()
+    fun shelvesOf(mangaId: Long): Flow<List<Long>> = shelfDao.observeFor(mangaId)
+    suspend fun createShelf(name: String): Long = shelfDao.insert(ShelfEntity(name = name.trim(), position = shelfDao.nextPosition()))
+    suspend fun renameShelf(id: Long, name: String) = shelfDao.rename(id, name.trim())
+    suspend fun deleteShelf(id: Long) = shelfDao.delete(id)
+    suspend fun addToShelf(shelfId: Long, mangaIds: Collection<Long>) = shelfDao.add(mangaIds.map { ShelfManga(shelfId, it) })
+    suspend fun removeFromShelf(shelfId: Long, mangaId: Long) = shelfDao.remove(shelfId, mangaId)
+
+    // ------------------------------------------------------------------ Moving between sources
+
+    /** Finds candidates for [title] on [sourceId], best match first. */
+    suspend fun findOn(sourceId: Long, title: String): List<SManga> {
+        val found = sources.search(sourceId, title).mangas
+        return found.sortedByDescending { TitleMatcher.similarity(title, it.title) }
+    }
+
+    /**
+     * Moves a title to [target] on [sourceId]: carries over read chapters and bookmarks by chapter
+     * number, plus library membership, reading status, shelves and reader mode. Returns the new id.
+     */
+    suspend fun migrate(mangaId: Long, sourceId: Long, target: SManga): Long? {
+        val old = manga.get(mangaId) ?: return null
+        val newId = remember(sourceId, target)
+        if (newId == mangaId) return mangaId
+        refresh(newId)
+        val oldChapters = chapters.forManga(mangaId).filter { it.number >= 0 }
+        val read = oldChapters.filter { it.read }.map { it.number }.toSet()
+        val marked = oldChapters.filter { it.bookmark }.map { it.number }.toSet()
+        val lastRead = oldChapters.filter { it.lastReadAt > 0 }.associate { it.number to it }
+        val moved = chapters.forManga(newId).map { ch ->
+            val prior = lastRead[ch.number]
+            ch.copy(
+                read = ch.read || ch.number in read,
+                bookmark = ch.bookmark || ch.number in marked,
+                lastPageRead = prior?.lastPageRead ?: ch.lastPageRead,
+                lastReadAt = maxOf(ch.lastReadAt, prior?.lastReadAt ?: 0),
+            )
+        }
+        db.withTransaction {
+            if (moved.isNotEmpty()) chapters.updateAll(moved)
+            manga.get(newId)?.let { manga.update(it.copy(readingStatus = old.readingStatus, readerMode = old.readerMode)) }
+            shelfDao.shelvesOf(mangaId).forEach { shelfDao.add(listOf(ShelfManga(it, newId))) }
+            if (old.favorite) {
+                manga.setFavorite(newId, true, old.dateAdded.takeIf { it > 0 } ?: System.currentTimeMillis())
+                manga.setFavorite(mangaId, false, 0)
+            }
+        }
+        return newId
+    }
+
     /**
      * Moves a title to MangaDex: finds the same series there, adds it to the library and carries reading
      * progress over by chapter number. Returns the new title's id.
      */
     suspend fun moveToFallback(mangaId: Long): Long? {
         val old = manga.get(mangaId) ?: return null
-        val dex = sources.mangaDex
-        val match = TitleMatcher.best(old.title, dex.search(1, old.title, dex.filters()).mangas) ?: return null
-        val newId = remember(MangaDexSource.ID, match)
-        refresh(newId)
-        val readNumbers = chapters.forManga(mangaId).filter { it.read }.map { it.number }.toSet()
-        val target = chapters.forManga(newId)
-        chapters.setRead(target.filter { it.number in readNumbers }.map { it.id }, true)
-        if (old.favorite) {
-            setFavorite(newId, true)
-            setFavorite(mangaId, false)
-        }
-        return newId
+        val match = findOnFallback(old.title) ?: return null
+        return migrate(mangaId, MangaDexSource.ID, match)
     }
 
     /** Looks for [title] on MangaDex without changing anything. */
@@ -167,7 +213,7 @@ class LibraryRepository(
     // ------------------------------------------------------------------ Backup
 
     @Serializable
-    data class Backup(val version: Int = 1, val titles: List<BackupTitle>)
+    data class Backup(val version: Int = 1, val titles: List<BackupTitle>, val shelves: List<String> = emptyList())
 
     @Serializable
     data class BackupTitle(
@@ -178,31 +224,44 @@ class LibraryRepository(
         val readerMode: Int = 0,
         val dateAdded: Long = 0,
         val chapters: List<BackupChapter> = emptyList(),
+        val readingStatus: Int = 0,
+        /** Names of the shelves the title is on. */
+        val shelves: List<String> = emptyList(),
     )
 
     @Serializable
     data class BackupChapter(val url: String, val read: Boolean, val lastPageRead: Int = 0, val bookmark: Boolean = false, val lastReadAt: Long = 0)
 
     suspend fun exportBackup(): String {
+        val shelfNames = shelfDao.all().associate { it.id to it.name }
         val titles = manga.favorites().map { m ->
             BackupTitle(
                 m.sourceId, m.url, m.title, m.thumbnailUrl, m.readerMode, m.dateAdded,
                 chapters.forManga(m.id).filter { it.read || it.bookmark || it.lastPageRead > 0 }
                     .map { BackupChapter(it.url, it.read, it.lastPageRead, it.bookmark, it.lastReadAt) },
+                readingStatus = m.readingStatus,
+                shelves = shelfDao.shelvesOf(m.id).mapNotNull { shelfNames[it] },
             )
         }
-        return json.encodeToString(Backup.serializer(), Backup(titles = titles))
+        return json.encodeToString(Backup.serializer(), Backup(titles = titles, shelves = shelfNames.values.toList()))
     }
 
     /** Restores titles and progress. Chapters are matched once each title is refreshed. */
     suspend fun importBackup(text: String): Int {
         val backup = json.decodeFromString(Backup.serializer(), text)
+        // Shelves match by name, so restoring twice doesn't double them up.
+        val shelfIds = shelfDao.all().associate { it.name to it.id }.toMutableMap()
+        (backup.shelves + backup.titles.flatMap { it.shelves }).distinct().forEach { name ->
+            if (name !in shelfIds) shelfIds[name] = createShelf(name)
+        }
         var count = 0
         for (t in backup.titles) {
             val id = manga.find(t.sourceId, t.url)?.id ?: manga.insert(
                 MangaEntity(sourceId = t.sourceId, url = t.url, title = t.title, thumbnailUrl = t.thumbnailUrl, readerMode = t.readerMode),
             )
             manga.setFavorite(id, true, t.dateAdded.takeIf { it > 0 } ?: System.currentTimeMillis())
+            manga.setReadingStatus(id, t.readingStatus)
+            t.shelves.mapNotNull { shelfIds[it] }.forEach { shelfDao.add(listOf(ShelfManga(it, id))) }
             runCatching { refresh(id) }
             val byUrl = chapters.forManga(id).associateBy { it.url }
             val restored = t.chapters.mapNotNull { b ->

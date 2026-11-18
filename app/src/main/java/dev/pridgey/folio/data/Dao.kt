@@ -37,6 +37,9 @@ interface MangaDao {
     @Query("UPDATE manga SET readerMode = :mode WHERE id = :id")
     suspend fun setReaderMode(id: Long, mode: Int)
 
+    @Query("UPDATE manga SET readingStatus = :status WHERE id = :id")
+    suspend fun setReadingStatus(id: Long, status: Int)
+
     @Query("UPDATE manga SET sortDescending = :descending WHERE id = :id")
     suspend fun setSortDescending(id: Long, descending: Boolean)
 
@@ -45,7 +48,7 @@ interface MangaDao {
 
     @Query(
         """
-        SELECT m.id, m.sourceId, m.title, m.thumbnailUrl, m.lastUpdate, m.dateAdded, m.genres,
+        SELECT m.id, m.sourceId, m.title, m.thumbnailUrl, m.lastUpdate, m.dateAdded, m.genres, m.readingStatus,
             COALESCE(SUM(CASE WHEN c.read = 0 THEN 1 ELSE 0 END), 0) AS unread,
             COUNT(c.id) AS total,
             COALESCE(MAX(c.lastReadAt), 0) AS lastReadAt,
@@ -141,4 +144,40 @@ interface DownloadDao {
 
     @Query("DELETE FROM download_queue")
     suspend fun clear()
+}
+
+@Dao
+interface ShelfDao {
+    @Query("SELECT * FROM shelf ORDER BY position ASC, id ASC")
+    fun observe(): Flow<List<ShelfEntity>>
+
+    @Query("SELECT * FROM shelf ORDER BY position ASC, id ASC")
+    suspend fun all(): List<ShelfEntity>
+
+    @Query("SELECT * FROM shelf_manga")
+    fun observeMembers(): Flow<List<ShelfManga>>
+
+    @Query("SELECT shelfId FROM shelf_manga WHERE mangaId = :mangaId")
+    fun observeFor(mangaId: Long): Flow<List<Long>>
+
+    @Query("SELECT shelfId FROM shelf_manga WHERE mangaId = :mangaId")
+    suspend fun shelvesOf(mangaId: Long): List<Long>
+
+    @Insert
+    suspend fun insert(shelf: ShelfEntity): Long
+
+    @Query("UPDATE shelf SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
+    @Query("DELETE FROM shelf WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM shelf")
+    suspend fun nextPosition(): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun add(items: List<ShelfManga>)
+
+    @Query("DELETE FROM shelf_manga WHERE shelfId = :shelfId AND mangaId = :mangaId")
+    suspend fun remove(shelfId: Long, mangaId: Long)
 }

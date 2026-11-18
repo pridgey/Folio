@@ -107,6 +107,8 @@ import dev.pridgey.folio.data.ChapterEntity
 import dev.pridgey.folio.data.ChapterNumbers
 import dev.pridgey.folio.data.LibraryRepository
 import dev.pridgey.folio.data.MangaEntity
+import dev.pridgey.folio.data.ReadingStatus
+import androidx.compose.material.icons.rounded.Bookmarks
 import dev.pridgey.folio.image.CoverModel
 import dev.pridgey.folio.source.Health
 import dev.pridgey.folio.source.MangaDexSource
@@ -249,6 +251,10 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
     val collapsed by remember { derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > with(density) { 400.dp.toPx() } } }
     val selecting = selection.isNotEmpty()
     var exploring by remember { mutableStateOf(false) }
+    var organizing by remember { mutableStateOf(false) }
+    var migrating by remember { mutableStateOf(false) }
+    val shelfIds by remember(route.mangaId) { Graph.library.shelvesOf(route.mangaId) }.collectAsStateWithLifecycle(emptyList())
+    val allShelves by remember { Graph.library.shelves() }.collectAsStateWithLifecycle(emptyList())
     BackHandler(selecting) { vm.clearSelection() }
 
     val title = manga?.title ?: ""
@@ -302,6 +308,27 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Where the title stands: status and shelves, once it's in the library.
+                if (manga?.favorite == true) {
+                    item(key = "organize") {
+                        val status = ReadingStatus.of(manga?.readingStatus ?: 0)
+                        val on = allShelves.filter { it.id in shelfIds }.joinToString(", ") { it.name }
+                        Row(
+                            Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .background(c.fill).pressable(onClick = { organizing = true }, pressedScale = 0.99f).padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Bookmarks, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(status.label, style = Folio.type.subheadStrong, color = c.label)
+                                Text(if (on.isEmpty()) "Not on a shelf" else on, style = Folio.type.caption, color = c.secondaryLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text("Organize", style = Folio.type.footnoteStrong, color = c.accent)
                         }
                     }
                 }
@@ -411,15 +438,14 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                             text = { Text("Download unread") }, leadingIcon = { Icon(Icons.Rounded.Download, null) },
                             onClick = { menu = false; vm.downloadUnread() },
                         )
-                        if (sourceId != MangaDexSource.ID) {
-                            DropdownMenuItem(
-                                text = { Text("Move to MangaDex") }, leadingIcon = { Icon(Icons.Rounded.SwapHoriz, null) },
-                                onClick = {
-                                    menu = false
-                                    vm.moveToFallback { id -> nav.back(); nav.details(id, MangaDexSource.ID) }
-                                },
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { Text("Move to another source") }, leadingIcon = { Icon(Icons.Rounded.SwapHoriz, null) },
+                            onClick = { menu = false; migrating = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Status and shelves") }, leadingIcon = { Icon(Icons.Rounded.Bookmarks, null) },
+                            onClick = { menu = false; organizing = true },
+                        )
                         DropdownMenuItem(
                             text = { Text("Explore chapters") }, leadingIcon = { Icon(Icons.Rounded.GridView, null) },
                             onClick = { menu = false; if (!all.isNullOrEmpty()) exploring = true },
@@ -454,6 +480,13 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                 BulkAction("Download", Icons.Rounded.Download) { vm.download(selection) }
                 BulkAction("Delete", Icons.Rounded.DeleteOutline) { vm.deleteDownloads(selection) }
             }
+        }
+    }
+
+    if (organizing) OrganizeSheet(route.mangaId, title, onDismiss = { organizing = false })
+    if (migrating) {
+        manga?.let { m ->
+            MigrateSheet(m, onMoved = { id, src -> migrating = false; nav.back(); nav.details(id, src) }, onDismiss = { migrating = false })
         }
     }
 

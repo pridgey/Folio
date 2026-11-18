@@ -74,6 +74,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.pridgey.folio.Graph
 import dev.pridgey.folio.data.LibraryItem
 import dev.pridgey.folio.data.LibrarySort
+import dev.pridgey.folio.data.ReadingStatus
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import dev.pridgey.folio.data.ReadingEntry
 import dev.pridgey.folio.ui.LocalNav
 import dev.pridgey.folio.ui.components.BottomBarSpacer
@@ -103,9 +106,27 @@ import kotlinx.coroutines.flow.stateIn
 
 class LibraryViewModel : ViewModel() {
     val query = MutableStateFlow("")
+    val filter = MutableStateFlow<LibraryFilter>(LibraryFilter.All)
+    val shelves = Graph.library.shelves().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val members = Graph.library.shelfMembers().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val shelfCounts = combine(members, Graph.library.library()) { m, lib ->
+        val ids = lib.map { it.id }.toHashSet()
+        m.filter { it.mangaId in ids }.groupingBy { it.shelfId }.eachCount()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    val items = combine(Graph.library.library(), Graph.settings.values, query) { list, settings, q ->
-        val filtered = if (q.isBlank()) list else list.filter { it.title.contains(q.trim(), ignoreCase = true) }
+    /** The whole library, for the filter bar's counts. */
+    val all = Graph.library.library().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val items = combine(Graph.library.library(), Graph.settings.values, query, filter, members) { list, settings, q, f, m ->
+        val scoped = when (f) {
+            LibraryFilter.All -> list
+            is LibraryFilter.Status -> list.filter { ReadingStatus.of(it.readingStatus) == f.status }
+            is LibraryFilter.Shelf -> {
+                val on = m.filter { it.shelfId == f.id }.map { it.mangaId }.toHashSet()
+                list.filter { it.id in on }
+            }
+        }
+        val filtered = if (q.isBlank()) scoped else scoped.filter { it.title.contains(q.trim(), ignoreCase = true) }
         when (settings.librarySort) {
             LibrarySort.LAST_READ -> filtered.sortedWith(compareByDescending<LibraryItem> { it.lastReadAt }.thenByDescending { it.dateAdded })
             LibrarySort.LAST_UPDATED -> filtered.sortedByDescending { it.latestUpload }
@@ -136,6 +157,13 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
     val showBanner = rememberUpdateBannerVisible()
     var sortMenu by remember { mutableStateOf(false) }
     var refreshing by rememberSaveable { mutableStateOf(false) }
+    val filter by vm.filter.collectAsStateWithLifecycle()
+    val shelves by vm.shelves.collectAsStateWithLifecycle()
+    val shelfCounts by vm.shelfCounts.collectAsStateWithLifecycle()
+    val whole by vm.all.collectAsStateWithLifecycle()
+    var organizing by remember { mutableStateOf<LibraryItem?>(null) }
+    var newShelf by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<dev.pridgey.folio.data.ShelfEntity?>(null) }
     if (refreshing && sync == null) refreshing = false
 
     Box(Modifier.fillMaxSize()) {
@@ -160,6 +188,13 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     Column {
                         LargeTitle("Library", inset = 0.dp)
                         SearchField(query, { vm.query.value = it }, Modifier.fillMaxWidth().padding(bottom = 4.dp), placeholder = "Search your library")
+                        if (whole.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            LibraryFilterBar(
+                                whole, shelves, shelfCounts, filter, onSelect = { vm.filter.value = it },
+                                onNewShelf = { newShelf = true }, onEditShelf = { editing = it },
+                            )
+                        }
                         AnimatedVisibility(sync != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                             sync?.let { s ->
                                 Column(Modifier.padding(top = 12.dp)) {
@@ -176,7 +211,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     }
                 }
 
-                if (recent.isNotEmpty() && query.isBlank()) {
+                if (recent.isNotEmpty() && query.isBlank() && filter == LibraryFilter.All) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "continue") {
                         Column {
                             Text("Continue reading", style = Folio.type.title2, color = c.label, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
@@ -192,7 +227,19 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                 }
 
                 val list = items
-                if (list != null && list.isEmpty() && query.isBlank()) {
+                val shelf = (filter as? LibraryFilter.Shelf)?.let { f -> shelves.firstOrNull { it.id == f.id } }
+                if (shelf != null && list != null) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "shelf-header") { ShelfHeader(shelf, list, onEdit = { editing = shelf }) }
+                }
+                if (list != null && list.isEmpty() && query.isBlank() && filter != LibraryFilter.All) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "empty-filter") {
+                        Text(
+                            if (shelf != null) "Nothing on this shelf yet. Long-press a title, or use Organize on its page, to add it."
+                            else "No titles here yet. Long-press a title to set its status.",
+                            style = Folio.type.subhead, color = c.secondaryLabel, modifier = Modifier.padding(vertical = 24.dp),
+                        )
+                    }
+                } else if (list != null && list.isEmpty() && query.isBlank()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
                         EmptyState(
                             icon = Icons.Rounded.AutoStories,
@@ -206,14 +253,19 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     item(span = { GridItemSpan(maxLineSpan) }, key = "heading") {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text(
-                                if (query.isBlank()) "All titles" else "Results",
+                                when {
+                                    query.isNotBlank() -> "Results"
+                                    filter is LibraryFilter.Status -> (filter as LibraryFilter.Status).status.label
+                                    shelf != null -> "On this shelf"
+                                    else -> "All titles"
+                                },
                                 style = Folio.type.title2, color = c.label, modifier = Modifier.weight(1f),
                             )
                             Text(Format.plural(list.size, "title"), style = Folio.type.footnote, color = c.secondaryLabel)
                         }
                     }
                     items(list, key = { it.id }) { item ->
-                        LibraryTile(item, Modifier.animateItem()) {
+                        LibraryTile(item, Modifier.animateItem(), onLongClick = { organizing = item }) {
                             nav.details(item.id, item.sourceId, item.thumbnailUrl, "lib-${item.id}")
                         }
                     }
@@ -264,12 +316,43 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
             })
         }
     }
+    LibraryDialogs(
+        organizing, onOrganized = { organizing = null },
+        newShelf, onNewShelfDone = { id -> newShelf = false; if (id != null) vm.filter.value = LibraryFilter.Shelf(id) },
+        editing, onEditDone = { editing = null },
+        onDeleted = { id -> if (vm.filter.value == LibraryFilter.Shelf(id)) vm.filter.value = LibraryFilter.All },
+    )
 }
 
 @Composable
-private fun LibraryTile(item: LibraryItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun LibraryDialogs(
+    organizing: LibraryItem?,
+    onOrganized: () -> Unit,
+    newShelf: Boolean,
+    onNewShelfDone: (Long?) -> Unit,
+    editing: dev.pridgey.folio.data.ShelfEntity?,
+    onEditDone: () -> Unit,
+    onDeleted: (Long) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    organizing?.let { OrganizeSheet(it.id, it.title, onDismiss = onOrganized) }
+    if (newShelf) {
+        ShelfNameDialog("New shelf", "", onDismiss = { onNewShelfDone(null) }) { name ->
+            scope.launch { onNewShelfDone(Graph.library.createShelf(name)) }
+        }
+    }
+    editing?.let { shelf ->
+        ShelfNameDialog(
+            "Rename shelf", shelf.name, onDismiss = onEditDone,
+            onDelete = { scope.launch { Graph.library.deleteShelf(shelf.id) }; onDeleted(shelf.id); onEditDone() },
+        ) { name -> scope.launch { Graph.library.renameShelf(shelf.id, name) }; onEditDone() }
+    }
+}
+
+@Composable
+private fun LibraryTile(item: LibraryItem, modifier: Modifier = Modifier, onLongClick: () -> Unit, onClick: () -> Unit) {
     val c = Folio.colors
-    Column(modifier.pressable(onClick = onClick)) {
+    Column(modifier.pressable(onClick = onClick, onLongClick = onLongClick)) {
         Box {
             Cover(item.sourceId, item.thumbnailUrl, item.title, Modifier.fillMaxWidth(), sharedKey = "lib-${item.id}")
             if (item.unread > 0) {

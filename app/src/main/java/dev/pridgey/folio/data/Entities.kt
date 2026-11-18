@@ -29,7 +29,37 @@ data class MangaEntity(
     val readerMode: Int = 0,
     /** Newest first (true) or oldest first in the chapter list. */
     val sortDescending: Boolean = true,
+    /** A [ReadingStatus] ordinal. */
+    @ColumnInfo(defaultValue = "0") val readingStatus: Int = 0,
 )
+
+/** Where a title stands for the reader. Stored by ordinal, so only ever add to the end. */
+enum class ReadingStatus(val label: String) {
+    READING("Reading"), PLAN_TO_READ("Plan to Read"), ON_HOLD("On Hold"), COMPLETED("Completed"), DROPPED("Dropped");
+
+    companion object {
+        fun of(ordinal: Int) = entries.getOrElse(ordinal) { READING }
+    }
+}
+
+/** A collection the reader names and fills. */
+@Entity(tableName = "shelf")
+data class ShelfEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val position: Int = 0,
+)
+
+@Entity(
+    tableName = "shelf_manga",
+    primaryKeys = ["shelfId", "mangaId"],
+    indices = [Index("mangaId")],
+    foreignKeys = [
+        ForeignKey(ShelfEntity::class, ["id"], ["shelfId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(MangaEntity::class, ["id"], ["mangaId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ShelfManga(val shelfId: Long, val mangaId: Long)
 
 @Entity(
     tableName = "chapter",
@@ -77,6 +107,7 @@ data class LibraryItem(
     val lastUpdate: Long,
     val dateAdded: Long,
     val genres: String?,
+    val readingStatus: Int = 0,
 )
 
 /** A row in "Continue reading" and History. */
