@@ -146,6 +146,9 @@ class FeatureLogicTest {
         dev.pridgey.folio.ui.screens.Finish.entries.forEach { f -> assertTrue("$f", recipes.any { it.finish == f }) }
         dev.pridgey.folio.ui.screens.TitleSpot.entries.forEach { s -> assertTrue("$s", recipes.any { it.spot == s }) }
         assertTrue(recipes.any { it.up } && recipes.any { !it.up })
+        // Titles set against an edge are an accent: about one in ten.
+        val edged = recipes.count { it.side != 0 } / recipes.size.toFloat()
+        assertTrue(edged in 0.06f..0.14f)
         // Most books stay plain; the finishes are accents.
         assertTrue(recipes.count { it.finish == dev.pridgey.folio.ui.screens.Finish.PLAIN } > recipes.size * 0.6)
         // A sideways cover always keeps its title in the band, clear of the logo.

@@ -100,21 +100,23 @@ internal fun recipeFor(seed: Long): SpineRecipe {
         weights.forEachIndexed { i, w -> if (roll < w) return i else roll -= w }
         return weights.lastIndex
     }
-    val frame = ArtFrame.entries[weighted(35, 40, 15, 10)]
+    val frame = ArtFrame.entries[weighted(37, 42, 15, 6)]
     val zoom = when (frame) {
         ArtFrame.STANDARD, ArtFrame.SIDEWAYS -> 1f
         ArtFrame.CLOSE_UP -> 1.45f + r.nextFloat() * 0.5f
         ArtFrame.TILTED -> 1f // worked out from the spine's shape when drawn
     }
     val focusX = 0.35f + r.nextFloat() * 0.3f
-    val focusY = 0.12f + r.nextFloat() * 0.22f
+    // Between the logo (usually across the top) and the credits (across the foot), where the art is.
+    val focusY = 0.32f + r.nextFloat() * 0.22f
     val tilt = (4f + r.nextFloat() * 4f) * if (r.nextBoolean()) 1f else -1f
     val finish = Finish.entries[weighted(70, 15, 15)]
     // A sideways cover keeps its logo clear: its title goes on frost at the foot.
     val spot = if (frame == ArtFrame.SIDEWAYS) TitleSpot.FROST else TitleSpot.entries[weighted(30, 20, 20, 8, 12, 10)]
     val face = r.nextInt(TitleFaces.size)
     val up = r.nextInt(100) < 15
-    val side = weighted(25, 50, 25) - 1
+    // Edge-set titles are unusual on real spines, so only about one in ten.
+    val side = weighted(5, 90, 5) - 1
     return SpineRecipe(frame, zoom, focusX, focusY, tilt, finish, spot, face, up, side)
 }
 
@@ -183,7 +185,7 @@ internal object AssortedLook : GalleryLook() {
     @Composable
     private fun Art(b: Book, recipe: SpineRecipe, pull: Float, art: String?, blurred: Boolean) {
         val filter = if (recipe.finish == Finish.VINTAGE) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.72f) }) else null
-        val soft = if (blurred && Build.VERSION.SDK_INT >= 31) Modifier.blur(9.dp) else Modifier
+        val soft = if (blurred && Build.VERSION.SDK_INT >= 31) Modifier.blur(6.dp) else Modifier
         when (recipe.frame) {
             ArtFrame.SIDEWAYS -> Column(Modifier.fillMaxSize().then(soft)) {
                 // The cover on its side: the band across its top, usually the logo, runs down the spine.
@@ -210,13 +212,18 @@ internal object AssortedLook : GalleryLook() {
                                 rotationZ = recipe.tilt
                                 scaleX = s
                                 scaleY = s
-                                transformOrigin = TransformOrigin(0.5f, 0.45f)
+                                transformOrigin = TransformOrigin(0.5f, 0.55f)
                             }
-                            else -> Unit
+                            else -> {
+                                // Standard: in a little from the top and foot, where covers carry their words.
+                                scaleX = 1.22f
+                                scaleY = 1.22f
+                                transformOrigin = TransformOrigin(0.5f, 0.56f)
+                            }
                         }
                     },
                 ) {
-                    SpineImage(b, art, if (recipe.frame == ArtFrame.STANDARD) Alignment.Center else Alignment.TopCenter, filter)
+                    SpineImage(b, art, Alignment.Center, filter)
                 }
             }
         }
@@ -358,7 +365,7 @@ internal object AssortedLook : GalleryLook() {
             }
             Box(
                 Modifier.matchParentSize().drawBehind {
-                    drawRect(Color.Black.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.34f else 0.55f))
+                    drawRect(Color.Black.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.2f else 0.45f))
                     // Light catching the glass's top edge, fading off rather than ruling a line.
                     drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = 10.dp.toPx()))
                 },
