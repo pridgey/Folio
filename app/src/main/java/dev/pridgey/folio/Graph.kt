@@ -8,6 +8,7 @@ import dev.pridgey.folio.download.Downloads
 import dev.pridgey.folio.source.ExtensionIndex
 import dev.pridgey.folio.source.ExtensionManager
 import dev.pridgey.folio.source.MangaDexSource
+import dev.pridgey.folio.source.SourceLog
 import dev.pridgey.folio.source.SourceManager
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
@@ -65,7 +66,7 @@ object Graph {
         settings = Settings(app)
         db = FolioDatabase.create(app)
         extensions = ExtensionManager(app, network.client, ExtensionIndex(network.client, json))
-        sources = SourceManager(extensions, MangaDexSource(network.client, json) { settings.current.language }, settings)
+        sources = SourceManager(extensions, MangaDexSource(network.client, json) { settings.current.language }, settings, SourceLog(app, json, scope))
         library = LibraryRepository(db, sources, json)
         downloads = Downloads(app, db, sources, library)
     }

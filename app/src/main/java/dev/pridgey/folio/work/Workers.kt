@@ -37,6 +37,8 @@ class LibraryUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
         try {
             titles.forEachIndexed { i, m ->
                 runCatching { repo.refresh(m.id, details = false) }.onSuccess { n ->
+                    // New chapters may extend what smart downloads should hold.
+                    runCatching { Graph.downloads.topUp(m.id) }
                     if (n > 0) {
                         found += m.title to n
                         if (settings.autoDownload) {

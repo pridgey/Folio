@@ -1,5 +1,11 @@
 package dev.pridgey.folio.ui.screens
 
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Storage
+import dev.pridgey.folio.data.DownloadPace
+
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Vibration
@@ -188,6 +194,22 @@ fun SettingsTab(glass: GlassState) {
             }
 
             item {
+                GroupedSection(
+                    header = "Downloads",
+                    footer = "Keeping chapters ahead downloads the next few of every title you're reading, as you go. Folio slows down by itself if a site pushes back.",
+                ) {
+                    MenuRow(
+                        "Keep chapters ahead", Icons.Rounded.FastForward, Teal,
+                        aheadLabel(s.downloadAhead), listOf(0, 2, 3, 5, 10), ::aheadLabel,
+                    ) { n -> update { it.copy(downloadAhead = n) } }
+                    GroupedDivider(59.dp)
+                    MenuRow("Download pace", Icons.Rounded.Speed, Orange, s.downloadPace.label, DownloadPace.entries, { it.label }) { p -> update { it.copy(downloadPace = p) } }
+                    GroupedDivider(59.dp)
+                    GroupedRow("Storage", icon = Icons.Rounded.Storage, iconBackground = Purple, chevron = true, onClick = { nav.storage() })
+                }
+            }
+
+            item {
                 val mf = extensions[ExtensionManager.MANGAFIRE]
                 GroupedSection(header = "Sources") {
                     GroupedRow(
@@ -197,6 +219,8 @@ fun SettingsTab(glass: GlassState) {
                     )
                     GroupedDivider(59.dp)
                     GroupedRow("Downloads", icon = Icons.Rounded.Download, iconBackground = Green, chevron = true, onClick = { nav.downloads() })
+                    GroupedDivider(59.dp)
+                    GroupedRow("Source health", icon = Icons.Rounded.MonitorHeart, iconBackground = Red, chevron = true, onClick = { nav.sourceHealth() })
                 }
             }
 
@@ -222,6 +246,8 @@ fun SettingsTab(glass: GlassState) {
         TopBar("Settings", glass, showTitle = scrolled)
     }
 }
+
+private fun aheadLabel(n: Int) = if (n == 0) "Off" else "$n chapters"
 
 private fun intervalLabel(h: Int) = when (h) {
     0 -> "Never"

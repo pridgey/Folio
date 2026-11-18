@@ -49,6 +49,8 @@ import dev.pridgey.folio.ui.screens.SourceSettingsScreen
 import dev.pridgey.folio.ui.screens.SourcesScreen
 import dev.pridgey.folio.ui.screens.WebScreen
 import dev.pridgey.folio.ui.screens.AuthorScreen
+import dev.pridgey.folio.ui.screens.SourceHealthScreen
+import dev.pridgey.folio.ui.screens.StorageScreen
 import dev.pridgey.folio.ui.screens.TagExplorerScreen
 import dev.pridgey.folio.ui.screens.TaggedScreen
 import dev.pridgey.folio.ui.theme.Folio
@@ -71,6 +73,8 @@ object Routes {
     /** Titles carrying all of these tags; names are matched to MangaDex tags. */
     @Serializable data class Tagged(val names: List<String>)
     @Serializable data class Author(val name: String)
+    @Serializable data object Storage
+    @Serializable data object SourceHealth
 }
 
 /** App-wide actions screens use to move around. */
@@ -97,6 +101,8 @@ class Nav(private val controller: NavHostController, private val context: Contex
     fun tags() = controller.navigate(Routes.Tags) { launchSingleTop = true }
     fun tagged(vararg names: String) = controller.navigate(Routes.Tagged(names.toList()))
     fun author(name: String) = controller.navigate(Routes.Author(name))
+    fun storage() = controller.navigate(Routes.Storage) { launchSingleTop = true }
+    fun sourceHealth() = controller.navigate(Routes.SourceHealth) { launchSingleTop = true }
 
     fun read(mangaId: Long, chapterId: Long) =
         context.startActivity(ReaderActivity.intent(context, mangaId, chapterId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK.takeIf { context !is android.app.Activity } ?: 0))
@@ -195,6 +201,8 @@ fun FolioNavHost(activity: MainActivity) {
                     composable<Routes.Tags> { ProvideNavScope(this) { TagExplorerScreen() } }
                     composable<Routes.Tagged> { entry -> ProvideNavScope(this) { TaggedScreen(entry.toRoute<Routes.Tagged>().names) } }
                     composable<Routes.Author> { entry -> ProvideNavScope(this) { AuthorScreen(entry.toRoute<Routes.Author>().name) } }
+                    composable<Routes.Storage> { StorageScreen() }
+                    composable<Routes.SourceHealth> { SourceHealthScreen() }
                     composable<Routes.Web> { entry ->
                         val r = entry.toRoute<Routes.Web>()
                         WebScreen(r.url, r.title)

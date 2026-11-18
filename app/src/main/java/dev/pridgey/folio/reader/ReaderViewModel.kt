@@ -169,6 +169,8 @@ class ReaderViewModel(app: Application, private var mangaId: Long, startChapterI
         if (Graph.settings.current.deleteAfterRead && chapter.id in Graph.downloads.downloaded.value) {
             Graph.downloads.delete(mangaId, listOf(chapter.id))
         }
+        // Keep the next few chapters ready offline.
+        Graph.downloads.topUp(mangaId)
     }
 
     /** Appends the chapter after [chapter] to the end of the reader, once. */

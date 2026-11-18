@@ -89,6 +89,55 @@ class Downloads(
 
     fun sizeBytes(): Long = root.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
 
+    /** Space used by one title's downloads. */
+    data class Usage(val mangaId: Long, val bytes: Long, val chapters: Int)
+
+    suspend fun usage(): List<Usage> = withContext(Dispatchers.IO) {
+        root.listFiles().orEmpty().mapNotNull { m ->
+            val id = m.name.toLongOrNull() ?: return@mapNotNull null
+            val chapters = m.listFiles().orEmpty().filter { it.isDirectory }
+            Usage(id, m.walkBottomUp().filter { it.isFile }.sumOf { it.length() }, chapters.count { File(it, DONE).exists() })
+        }.filter { it.bytes > 0 }.sortedByDescending { it.bytes }
+    }
+
+    /** Deletes downloads of chapters already read; for one title, or all of them. Returns how many went. */
+    suspend fun deleteRead(mangaId: Long? = null): Int {
+        val ids = root.listFiles().orEmpty().mapNotNull { it.name.toLongOrNull() }.filter { mangaId == null || it == mangaId }
+        var n = 0
+        ids.forEach { m ->
+            val read = repo.chaptersOf(m).filter { it.read && it.id in _downloaded.value }.map { it.id }
+            if (read.isNotEmpty()) {
+                delete(m, read)
+                n += read.size
+            }
+        }
+        return n
+    }
+
+    /** Deletes everything downloaded for a title, including half-finished chapters. */
+    suspend fun deleteTitle(mangaId: Long) = withContext(Dispatchers.IO) {
+        val d = File(root, mangaId.toString())
+        val ids = d.listFiles().orEmpty().mapNotNull { it.name.toLongOrNull() }.toSet()
+        d.deleteRecursively()
+        _downloaded.update { it - ids }
+    }
+
+    /**
+     * Smart downloads: keeps the next [ahead] unread chapters (from where the reader is) downloaded.
+     * Does nothing when the setting is off.
+     */
+    suspend fun topUp(mangaId: Long, ahead: Int = settingsAhead()) {
+        if (ahead <= 0) return
+        val chapters = repo.chaptersOf(mangaId)
+        if (chapters.none { it.read || it.lastReadAt > 0 }) return // Only titles you've started.
+        val ordered = LibraryRepository.readingOrder(chapters)
+        val from = repo.nextToRead(chapters)?.let { n -> ordered.indexOfFirst { it.id == n.id } } ?: return
+        val want = ordered.drop(from.coerceAtLeast(0)).filter { !it.read }.take(ahead).map { it.id }
+        enqueue(mangaId, want)
+    }
+
+    private fun settingsAhead() = dev.pridgey.folio.Graph.settings.current.downloadAhead
+
     /** Downloads the next queued chapter. Returns false when the queue is empty. */
     internal suspend fun downloadNext(onProgress: (Progress, String) -> Unit): Boolean {
         val item = db.downloads().next() ?: return false
@@ -102,14 +151,16 @@ class Downloads(
         val target = dir(manga.id, chapter.id)
         val sChapter = with(repo) { chapter.toSChapter() }
         try {
-            val pages = sources.call(manga.sourceId) { it.pages(sChapter) }
+            val pages = Pacer.paced(manga.sourceId) { sources.call(manga.sourceId) { it.pages(sChapter) } }
             target.mkdirs()
             pages.forEachIndexed { i, page ->
                 val file = File(target, "%04d".format(i))
                 if (!file.exists() || file.length() == 0L) {
                     val tmp = File(target, "%04d.part".format(i))
-                    sources.call(manga.sourceId) { src ->
-                        src.image(page).use { res -> tmp.outputStream().use { res.body.byteStream().copyTo(it) } }
+                    Pacer.paced(manga.sourceId) {
+                        sources.call(manga.sourceId) { src ->
+                            src.image(page).use { res -> tmp.outputStream().use { res.body.byteStream().copyTo(it) } }
+                        }
                     }
                     tmp.renameTo(file)
                 }

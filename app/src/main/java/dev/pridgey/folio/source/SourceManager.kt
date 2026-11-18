@@ -31,6 +31,8 @@ class SourceManager(
     private val extensions: ExtensionManager,
     val mangaDex: MangaDexSource,
     private val settings: Settings,
+    /** Where calls and repairs are recorded for the source health page. */
+    val log: SourceLog? = null,
 ) {
     private val _health = MutableStateFlow<Map<Long, Health>>(emptyMap())
     val health: StateFlow<Map<Long, Health>> = _health.asStateFlow()
@@ -76,12 +78,15 @@ class SourceManager(
                 throw e
             }
             mark(id, Health.Failing(describe(e), healing = true))
+            log?.event(id, SourceLog.Kind.HEALING, describe(e))
             val healed = runCatching { extensions.heal(pkg) }.getOrDefault(false)
             val fresh = get(id)
             if (!healed || fresh == null) {
+                log?.event(id, SourceLog.Kind.HEAL_FAILED, if (healed) null else "No newer build was available")
                 mark(id, Health.Failing(describe(e)))
                 throw e
             }
+            log?.event(id, SourceLog.Kind.HEALED, extensions.status.value[pkg]?.installed?.versionName?.let { "Updated to $it" })
             try {
                 block(fresh).also { mark(id, Health.Ok) }
             } catch (e2: CancellationException) {
@@ -97,7 +102,14 @@ class SourceManager(
     suspend fun search(sourceId: Long, query: String, page: Int = 1, filters: FilterList? = null): MangasPage =
         call(sourceId) { it.search(page, query, filters ?: it.filters()) }
 
-    private fun mark(id: Long, health: Health) = _health.update { it + (id to health) }
+    private fun mark(id: Long, health: Health) {
+        _health.update { it + (id to health) }
+        when (health) {
+            is Health.Ok -> log?.ok(id)
+            is Health.Failing -> if (!health.healing) log?.failed(id, health.message)
+            Health.Unknown -> Unit
+        }
+    }
 
     private fun worthHealing(e: Exception): Boolean = when {
         e is UnknownHostException -> false

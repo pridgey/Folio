@@ -130,7 +130,7 @@ private val Purple = Color(0xFFAF52DE)
 
 /** A screen with a back button and a grouped, scrolling body. */
 @Composable
-private fun GroupedScreen(title: String, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+internal fun GroupedScreen(title: String, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     val c = Folio.colors
     val nav = LocalNav.current
     val glass = rememberGlassState()

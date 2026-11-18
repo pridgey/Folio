@@ -29,6 +29,9 @@ enum class PageScale(val label: String) { FIT_SCREEN("Fit screen"), FIT_WIDTH("F
 /** How a page turn looks in the paged reader. */
 enum class PageEffect(val label: String) { SLIDE("Slide"), STACK("Stack"), FADE("Fade"), TURN("Turn") }
 
+/** How hard downloads lean on a site. Folio slows down further on its own when a site pushes back. */
+enum class DownloadPace(val label: String, val gapMs: Long) { FAST("Fast", 0), BALANCED("Balanced", 250), GENTLE("Gentle", 1200) }
+
 enum class LibrarySort(val label: String) { LAST_READ("Recently read"), LAST_UPDATED("New chapters"), UNREAD("Unread"), TITLE("Title"), DATE_ADDED("Date added") }
 
 /**
@@ -59,6 +62,9 @@ class Settings(context: Context) {
         /** Two pages side by side when the window is wide (tablets, landscape). */
         val spreads: Boolean = true,
         val autoCrop: Boolean = false,
+        /** Keep this many unread chapters downloaded ahead of where you are; 0 is off. */
+        val downloadAhead: Int = 0,
+        val downloadPace: DownloadPace = DownloadPace.BALANCED,
         val updateIntervalHours: Int = 12,
         val updateOnlyOnWifi: Boolean = true,
         val notifyNewChapters: Boolean = true,
@@ -107,6 +113,8 @@ class Settings(context: Context) {
             chapterHaptics = getBoolean("chapterHaptics", d.chapterHaptics),
             spreads = getBoolean("spreads", d.spreads),
             autoCrop = getBoolean("autoCrop", d.autoCrop),
+            downloadAhead = getInt("downloadAhead", d.downloadAhead),
+            downloadPace = enum("downloadPace", d.downloadPace),
             updateIntervalHours = getInt("updateIntervalHours", d.updateIntervalHours),
             updateOnlyOnWifi = getBoolean("updateOnlyOnWifi", d.updateOnlyOnWifi),
             notifyNewChapters = getBoolean("notifyNewChapters", d.notifyNewChapters),
@@ -140,6 +148,8 @@ class Settings(context: Context) {
         .putBoolean("chapterHaptics", v.chapterHaptics)
         .putBoolean("spreads", v.spreads)
         .putBoolean("autoCrop", v.autoCrop)
+        .putInt("downloadAhead", v.downloadAhead)
+        .putString("downloadPace", v.downloadPace.name)
         .putInt("updateIntervalHours", v.updateIntervalHours)
         .putBoolean("updateOnlyOnWifi", v.updateOnlyOnWifi)
         .putBoolean("notifyNewChapters", v.notifyNewChapters)

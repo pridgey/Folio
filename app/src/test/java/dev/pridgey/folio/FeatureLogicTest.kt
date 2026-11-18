@@ -6,6 +6,7 @@ import dev.pridgey.folio.reader.CropBorders
 import dev.pridgey.folio.reader.NightSchedule
 import dev.pridgey.folio.reader.ReaderItem
 import dev.pridgey.folio.reader.spreadsOf
+import dev.pridgey.folio.source.SourceLog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -15,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import java.time.LocalTime
 
 @RunWith(RobolectricTestRunner::class)
@@ -104,5 +106,15 @@ class FeatureLogicTest {
         val r = bounds(page(180), sidesOnly = false)!!
         assertEquals(100 - 4, r[0])
         assertEquals(150 - 4, r[1])
+    }
+
+    @Test fun uptimeNeedsEnoughCalls() {
+        val today = LocalDate.now().toEpochDay()
+        val s = SourceLog.Snapshot(days = mapOf(1L to listOf(SourceLog.Day(today, ok = 9, failed = 1)), 2L to listOf(SourceLog.Day(today, ok = 1))))
+        assertEquals(0.9f, s.uptime(1L)!!, 0.001f)
+        assertNull(s.uptime(2L))
+        // Days outside the window don't count.
+        val old = SourceLog.Snapshot(days = mapOf(1L to listOf(SourceLog.Day(today - 30, failed = 10))))
+        assertNull(old.uptime(1L))
     }
 }
