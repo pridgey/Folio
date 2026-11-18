@@ -151,8 +151,6 @@ class FeatureLogicTest {
         assertTrue(edged in 0.06f..0.14f)
         // Most books stay plain; the finishes are accents.
         assertTrue(recipes.count { it.finish == dev.pridgey.folio.ui.screens.Finish.PLAIN } > recipes.size * 0.6)
-        // A sideways cover always keeps its title in the band, clear of the logo.
-        assertTrue(recipes.filter { it.frame == dev.pridgey.folio.ui.screens.ArtFrame.SIDEWAYS }.all { it.spot == dev.pridgey.folio.ui.screens.TitleSpot.FROST })
     }
 
     @Test fun longTitlesBecomeInitials() {

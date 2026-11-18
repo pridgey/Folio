@@ -116,7 +116,7 @@ internal fun recipeFor(seed: Long): SpineRecipe {
     val focusY = 0.32f + r.nextFloat() * 0.22f
     val tilt = (4f + r.nextFloat() * 4f) * if (r.nextBoolean()) 1f else -1f
     val finish = Finish.entries[weighted(70, 15, 15)]
-    // A sideways cover keeps its logo clear: its title goes on frost at the foot.
+    // A sideways cover sets no title (its logo is the title), so its spot goes unused.
     val spot = if (frame == ArtFrame.SIDEWAYS) TitleSpot.FROST else TitleSpot.entries[weighted(32, 22, 26, 8, 12)]
     val face = r.nextInt(TitleFaces.size)
     val up = r.nextInt(100) < 15
@@ -218,13 +218,9 @@ internal object AssortedLook : GalleryLook() {
         val filter = if (recipe.finish == Finish.VINTAGE) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.72f) }) else null
         val soft = if (blurred && Build.VERSION.SDK_INT >= 31) Modifier.blur(6.dp) else Modifier
         if (recipe.frame == ArtFrame.SIDEWAYS) {
-            Column(Modifier.fillMaxSize().then(soft)) {
-                // The cover on its side: the band across its top, usually the logo, runs down the spine.
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    Box(Modifier.fillMaxSize().downward()) { SpineImage(b, source, Alignment.TopCenter, filter) }
-                }
-                Box(Modifier.fillMaxWidth().height(b.height * 0.26f)) { SpineImage(b, source, Alignment.BottomCenter, filter) }
-            }
+            // The cover on its side: the band across its top, usually the logo, runs the length of the
+            // spine. The logo is the title, so nothing is set over it.
+            Box(Modifier.fillMaxSize().then(soft).downward()) { SpineImage(b, source, Alignment.TopCenter, filter) }
             return
         }
         val aspect = b.height.value / b.width.value
@@ -316,6 +312,8 @@ internal object AssortedLook : GalleryLook() {
 
     @Composable
     private fun BoxScope.Title(b: Book, recipe: SpineRecipe, pull: Float, source: SpineSource?, accent: Color) {
+        // A sideways cover carries its own logo; let it speak for itself.
+        if (recipe.frame == ArtFrame.SIDEWAYS) return
         val face = TitleFaces[recipe.face]
         val said = remember(b.item.title) { spineText(b.item.title) }
         val text = if (said.initials) said.text else face.text(said.text)
@@ -381,8 +379,7 @@ internal object AssortedLook : GalleryLook() {
 
     /**
      * The foot of the spine seen through frosted glass: the same art, softened and lightly dimmed. It
-     * fades in from the art above rather than starting at an edge, and a fine line of light marks where
-     * the glass settles.
+     * fades in from the art above rather than starting at an edge.
      */
     @Composable
     private fun BoxScope.Frost(b: Book, recipe: SpineRecipe, pull: Float, source: SpineSource?, height: Dp, content: @Composable BoxScope.() -> Unit) {
@@ -405,11 +402,6 @@ internal object AssortedLook : GalleryLook() {
                 }
                 Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.2f else 0.45f)))
             }
-            // Where the glass settles: a fine line of light, softening off to either side.
-            Box(
-                Modifier.fillMaxWidth().padding(top = fade).height(0.75.dp)
-                    .background(Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.08f)))),
-            )
             Box(Modifier.fillMaxSize().padding(top = fade)) { content() }
         }
     }
