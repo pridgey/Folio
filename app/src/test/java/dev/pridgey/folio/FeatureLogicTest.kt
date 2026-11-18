@@ -191,4 +191,19 @@ class FeatureLogicTest {
         assertEquals(0f, side.text, 0.0001f)
         assertTrue(side.x - 0.125f >= 0.2f)
     }
+
+    @Test fun findsTheLogoAmongACoversLettering() {
+        val crop = dev.pridgey.folio.ui.screens.SpineCrop
+        val logo = crop.logo(
+            listOf(
+                floatArrayOf(0.1f, 0.05f, 0.9f, 0.2f), // the title, big, across the top
+                floatArrayOf(0.15f, 0.21f, 0.85f, 0.24f), // a small tagline under it
+                floatArrayOf(0.2f, 0.9f, 0.8f, 0.95f), // credits at the foot
+            ),
+        )!!
+        // The big title; the small tagline and the credits at the foot stay out of it.
+        assertEquals(0.05f, logo[1], 0.001f)
+        assertEquals(0.2f, logo[3], 0.001f)
+        assertNull(crop.logo(listOf(floatArrayOf(0.2f, 0.9f, 0.8f, 0.95f))))
+    }
 }

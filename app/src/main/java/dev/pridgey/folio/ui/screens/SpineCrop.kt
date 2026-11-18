@@ -60,4 +60,17 @@ internal object SpineCrop {
     }
 
     data class Window(val x: Float, val y: Float, val text: Float)
+
+    /**
+     * Where the cover's logo sits, as [left, top, right, bottom]: the larger lettering in its upper part
+     * (lines at least half as tall as the tallest there), taken together. That leaves out taglines and
+     * imprints, which are set smaller than a logo. Stylised logos are often only partly read, so this is
+     * the logo's readable heart rather than its full outline. Null when there's no lettering up there.
+     */
+    fun logo(boxes: List<FloatArray>): FloatArray? {
+        val upper = boxes.filter { (it[1] + it[3]) / 2 < 0.45f }
+        val tallest = upper.maxOfOrNull { it[3] - it[1] } ?: return null
+        val big = upper.filter { it[3] - it[1] >= tallest * 0.5f }
+        return floatArrayOf(big.minOf { it[0] }, big.minOf { it[1] }, big.maxOf { it[2] }, big.maxOf { it[3] })
+    }
 }

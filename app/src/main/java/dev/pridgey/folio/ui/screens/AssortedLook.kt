@@ -218,9 +218,15 @@ internal object AssortedLook : GalleryLook() {
         val filter = if (recipe.finish == Finish.VINTAGE) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.72f) }) else null
         val soft = if (blurred && Build.VERSION.SDK_INT >= 31) Modifier.blur(6.dp) else Modifier
         if (recipe.frame == ArtFrame.SIDEWAYS) {
-            // The cover on its side: the band across its top, usually the logo, runs the length of the
-            // spine. The logo is the title, so nothing is set over it.
-            Box(Modifier.fillMaxSize().then(soft).downward()) { SpineImage(b, source, Alignment.TopCenter, filter) }
+            // The cover on its side: its logo runs the length of the spine. The logo is the title, so
+            // nothing is set over it. Once the cover's been read, the logo is centred across the spine.
+            val logo = source?.scan?.boxes?.let { SpineCrop.logo(it) }
+            val coverAspect = source?.scan?.aspect ?: 0.68f
+            // Turned on its side, the spine shows this share of the cover's height.
+            val band = (coverAspect * b.width.value / b.height.value).coerceAtMost(1f)
+            val centre = logo?.let { (it[1] + it[3]) / 2 } ?: (band / 2)
+            val bias = if (1f - band > 0.001f) (((centre - band / 2) / (1f - band)) * 2f - 1f).coerceIn(-1f, 1f) else 0f
+            Box(Modifier.fillMaxSize().then(soft).downward()) { SpineImage(b, source, BiasAlignment(0f, bias), filter) }
             return
         }
         val aspect = b.height.value / b.width.value
