@@ -124,7 +124,7 @@ class FeatureLogicTest {
         val rows = dev.pridgey.folio.ui.screens.Spines.rows(books, available = 340f)
         assertEquals(books, rows.flatten())
         rows.forEach { row ->
-            val used = row.sumOf { dev.pridgey.folio.ui.screens.Spines.width(it.total).toDouble() } + (row.size - 1) * dev.pridgey.folio.ui.screens.Spines.GAP
+            val used = row.sumOf { dev.pridgey.folio.ui.screens.Spines.width(it.total).toDouble() } + (row.size - 1) * 3
             assertTrue(used <= 340.0)
         }
         assertTrue(dev.pridgey.folio.ui.screens.Spines.width(0) < dev.pridgey.folio.ui.screens.Spines.width(300))

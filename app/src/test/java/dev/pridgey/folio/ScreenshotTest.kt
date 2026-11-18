@@ -9,6 +9,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -127,6 +129,32 @@ class ScreenshotTest {
     @Test fun bookcase() {
         Graph.settings.update { it.copy(bookcase = true) }
         shoot("bookcase_light", false) { HomeScreen(null) {} }
+    }
+
+    /** Every shelf style, light and dark, for comparing art directions. */
+    @OptIn(ExperimentalSharedTransitionApi::class)
+    @Test fun shelfStyles() {
+        var dark by androidx.compose.runtime.mutableStateOf(false)
+        Graph.settings.update { it.copy(bookcase = true) }
+        compose.setContent {
+            val controller = rememberNavController()
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            FolioTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT, Graph.settings.current.accent) {
+                CompositionLocalProvider(LocalNav provides Nav(controller, context, scope)) { HomeScreen(null) {} }
+            }
+        }
+        dev.pridgey.folio.data.ShelfStyle.entries.forEach { style ->
+            listOf(false, true).forEach { d ->
+                dark = d
+                Graph.settings.update { it.copy(bookcase = true, shelfStyle = style) }
+                compose.waitForIdle()
+                Thread.sleep(300)
+                compose.mainClock.advanceTimeBy(1_500)
+                compose.waitForIdle()
+                compose.onRoot().captureRoboImage("screenshots/shelf_${style.name.lowercase()}_${if (d) "dark" else "light"}.png")
+            }
+        }
     }
 
     @Test fun bookcaseDark() {

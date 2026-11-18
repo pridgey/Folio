@@ -32,6 +32,20 @@ enum class PageEffect(val label: String) { SLIDE("Slide"), STACK("Stack"), FADE(
 /** How hard downloads lean on a site. Folio slows down further on its own when a site pushes back. */
 enum class DownloadPace(val label: String, val gapMs: Long) { FAST("Fast", 0), BALANCED("Balanced", 250), GENTLE("Gentle", 1200) }
 
+/** How the bookcase is drawn. */
+enum class ShelfStyle(val label: String, val blurb: String) {
+    COLLECTION("Collection", "Cream paper spines, black capitals, a chip of colour"),
+    PAPERBACK("Paperback", "Three-band paperbacks in each cover's colour"),
+    TANKOBON("Tankōbon", "White manga spines with art at the head"),
+    GALLERY("Gallery", "Cover art under warm spotlights on a dark wall"),
+    NEON("Neon", "Glowing tubes in the night, reflected below"),
+    GLASS("Glass", "Frosted panes of each cover over a soft aura"),
+    CLAY("Clay", "Soft, rounded pastel books that bounce"),
+    RISO("Riso", "Two-ink risograph prints on grainy paper"),
+    SWISS("Swiss", "Bold flat blocks and big chapter numbers"),
+    DIMENSIONAL("Dimensional", "Solid 3D books with page edges, on a slab"),
+}
+
 enum class LibrarySort(val label: String) { LAST_READ("Recently read"), LAST_UPDATED("New chapters"), UNREAD("Unread"), TITLE("Title"), DATE_ADDED("Date added") }
 
 /**
@@ -82,6 +96,7 @@ class Settings(context: Context) {
         val libraryColumns: Int = 3,
         /** Library as spines on a bookcase instead of a cover grid. */
         val bookcase: Boolean = false,
+        val shelfStyle: ShelfStyle = ShelfStyle.COLLECTION,
         val onboarded: Boolean = false,
         val lastUpdatesSeen: Long = 0,
     )
@@ -137,6 +152,7 @@ class Settings(context: Context) {
             librarySort = enum("librarySort", d.librarySort),
             libraryColumns = getInt("libraryColumns", d.libraryColumns),
             bookcase = getBoolean("bookcase", d.bookcase),
+            shelfStyle = enum("shelfStyle", d.shelfStyle),
             onboarded = getBoolean("onboarded", d.onboarded),
             lastUpdatesSeen = getLong("lastUpdatesSeen", d.lastUpdatesSeen),
         )
@@ -177,6 +193,7 @@ class Settings(context: Context) {
         .putString("librarySort", v.librarySort.name)
         .putInt("libraryColumns", v.libraryColumns)
         .putBoolean("bookcase", v.bookcase)
+        .putString("shelfStyle", v.shelfStyle.name)
         .putBoolean("onboarded", v.onboarded)
         .putLong("lastUpdatesSeen", v.lastUpdatesSeen)
         .apply()

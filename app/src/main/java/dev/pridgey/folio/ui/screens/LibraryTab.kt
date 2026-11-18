@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.ViewWeek
 import androidx.compose.material3.DropdownMenu
@@ -166,6 +167,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
     val scrolled by remember { derivedStateOf { grid.firstVisibleItemIndex > 1 || (grid.firstVisibleItemIndex == 1 && grid.firstVisibleItemScrollOffset > 0) } }
     val showBanner = rememberUpdateBannerVisible()
     var sortMenu by remember { mutableStateOf(false) }
+    var shelfStyles by remember { mutableStateOf(false) }
     var refreshing by rememberSaveable { mutableStateOf(false) }
     val filter by vm.filter.collectAsStateWithLifecycle()
     val shelves by vm.shelves.collectAsStateWithLifecycle()
@@ -310,10 +312,12 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                         }
                     }
                     if (settings.bookcase) {
-                        val rows = Spines.rows(list, available = bookcaseWidth)
+                        val look = lookFor(settings.shelfStyle)
+                        val rows = Spines.rows(list, available = bookcaseWidth - look.reserve, gap = look.gap)
                         itemsIndexed(rows, key = { _, row -> "shelf-row-${row.first().id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, row ->
                             BookcaseShelf(
-                                row, modifier = Modifier.animateItem().testTag("bookcase-shelf-$i"), onLongClick = { organizing = it },
+                                row, look, first = i == 0, last = i == rows.lastIndex, gridSpacing = 18.dp, margin = 16.dp,
+                                modifier = Modifier.testTag("bookcase-shelf-$i"), onLongClick = { organizing = it },
                             ) { item ->
                                 nav.details(item.id, item.sourceId, item.thumbnailUrl)
                             }
@@ -363,6 +367,16 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                             },
                         )
                     }
+                    if (settings.bookcase) {
+                        DropdownMenuItem(
+                            text = { Text("Shelf style: ${settings.shelfStyle.label}", style = Folio.type.body) },
+                            leadingIcon = { Icon(Icons.Rounded.Palette, null) },
+                            onClick = {
+                                shelfStyles = true
+                                sortMenu = false
+                            },
+                        )
+                    }
                     if (!settings.bookcase) {
                     HorizontalDivider(color = c.separator)
                     Text("Grid", style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
@@ -386,6 +400,9 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                 LibraryUpdateWorker.runNow(context)
             })
         }
+    }
+    if (shelfStyles) {
+        ShelfStyleSheet(settings.shelfStyle, onPick = { style -> Graph.settings.update { it.copy(shelfStyle = style) } }, onDismiss = { shelfStyles = false })
     }
     LibraryDialogs(
         organizing, onOrganized = { organizing = null },

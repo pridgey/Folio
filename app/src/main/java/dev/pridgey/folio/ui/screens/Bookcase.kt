@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package dev.pridgey.folio.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,20 +12,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -31,63 +40,48 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import dev.pridgey.folio.image.CoverModel
-import dev.pridgey.folio.ui.components.coverCacheKeys
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.core.graphics.ColorUtils
 import dev.pridgey.folio.data.LibraryItem
-import dev.pridgey.folio.ui.theme.Display
+import dev.pridgey.folio.data.ShelfStyle
+import dev.pridgey.folio.ui.components.pressable
 import dev.pridgey.folio.ui.theme.Folio
-import dev.pridgey.folio.ui.theme.Heading
-import dev.pridgey.folio.ui.theme.Inter
 import dev.pridgey.folio.ui.theme.rememberCoverColor
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.min
 
-// The library as books standing on a shelf. No furniture: spines in their covers' colours on one firm
-// line, like a well-kept shelf photographed straight on. Each title gets one of a few house styles for
-// its lettering, so the row reads as books from different publishers rather than one template.
+// The library as books on shelves. This file is the shelf's behaviour, shared by every look: filling
+// rows, scrubbing (books near the finger rise, the one under it is named), tap and hold, and the
+// lift's spring. What the books, shelf and wall look like comes from a ShelfLook (see ShelfLooks*.kt).
 
 internal object Spines {
-    const val GAP = 3
     private const val MIN_WIDTH = 30f
     private const val MAX_WIDTH = 36f
     const val TALLEST = 184
-
-    /** Room above the books for the name of the one under your finger. */
-    const val HEADROOM = 46
 
     /** Longer series are a touch thicker: grows quickly at first and stops at about 300 chapters. */
     fun width(chapters: Int): Float {
@@ -95,21 +89,21 @@ internal object Spines {
         return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * t
     }
 
-    private fun mix(id: Long, salt: Long): Long = ((id + salt) * 2654435761L) ushr 9
+    fun mix(id: Long, salt: Long): Long = ((id + salt) * 2654435761L) ushr 9
 
     /** Books aren't all the same height (within about a tenth). Steady per title. */
     fun height(id: Long): Int = TALLEST - (mix(id, 0) % 5).toInt() * 4
 
-    /** Which house style a title's lettering uses. Steady per title. */
-    fun style(id: Long): Int = (mix(id, 7) % 4).toInt()
+    /** A steady per-title choice among [n] variations. */
+    fun pick(id: Long, n: Int, salt: Long = 7): Int = (mix(id, salt) % n).toInt()
 
     /** Fills shelves left to right, starting a new one when the next book wouldn't fit. */
-    fun rows(items: List<LibraryItem>, available: Float): List<List<LibraryItem>> {
+    fun rows(items: List<LibraryItem>, available: Float, gap: Int = 3): List<List<LibraryItem>> {
         val rows = ArrayList<List<LibraryItem>>()
         var row = ArrayList<LibraryItem>()
         var used = 0f
         for (item in items) {
-            val w = width(item.total) + if (row.isEmpty()) 0 else GAP
+            val w = width(item.total) + if (row.isEmpty()) 0 else gap
             if (row.isNotEmpty() && used + w > available) {
                 rows += row
                 row = ArrayList()
@@ -126,31 +120,65 @@ internal object Spines {
     fun pull(distance: Float, reach: Float): Float = exp(-(distance / reach) * (distance / reach))
 }
 
+/** Everything a look needs to draw one book. */
+internal class Book(
+    val item: LibraryItem,
+    val index: Int,
+    val width: Dp,
+    val height: Dp,
+    /** The cover's main colour, once known. */
+    val cover: Color?,
+) {
+    val read get() = (item.total - item.unread).coerceAtLeast(0)
+    val started get() = read > 0
+}
+
+/** One shelf row as the wall behind it sees it. */
+internal class ShelfRow(
+    val books: List<Book>,
+    /** Each book's centre from the wall's left edge, in px. */
+    val centers: List<Float>,
+    val first: Boolean,
+    val last: Boolean,
+    val dark: Boolean,
+)
+
 /**
- * One shelf. Drag a finger along it and the books near the finger rise a little, with the one under
- * it named above the row.
+ * One shelf. The wall bleeds to the screen's edges and joins the shelves above and below, so a
+ * look's backdrop reads as one surface. [gridSpacing] is the list's spacing, given back between rows.
  */
 @Composable
 internal fun BookcaseShelf(
     row: List<LibraryItem>,
+    look: ShelfLook,
+    first: Boolean,
+    last: Boolean,
+    gridSpacing: Dp,
+    margin: Dp,
     modifier: Modifier = Modifier,
     onLongClick: (LibraryItem) -> Unit,
     onOpen: (LibraryItem) -> Unit,
 ) {
     val c = Folio.colors
+    val dark = look.dark ?: c.isDark
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     var touchX by remember { mutableStateOf<Float?>(null) }
     val latestOpen by rememberUpdatedState(onOpen)
     val latestLongClick by rememberUpdatedState(onLongClick)
 
-    // Each book's centre along the row, in px, for working out how close the finger is.
-    val centers = remember(row, density) {
+    val books = row.mapIndexed { i, item ->
+        key(item.id) {
+            Book(item, i, Spines.width(item.total).dp, Spines.height(item.id).dp, rememberCoverColor(item.sourceId, item.thumbnailUrl))
+        }
+    }
+    // Each book's centre along the row, in px.
+    val centers = remember(row, density, look) {
         var x = 0f
         row.map { item ->
             val w = with(density) { Spines.width(item.total).dp.toPx() }
             val center = x + w / 2
-            x += w + with(density) { Spines.GAP.dp.toPx() }
+            x += w + with(density) { look.gap.dp.toPx() }
             center
         }
     }
@@ -158,237 +186,222 @@ internal fun BookcaseShelf(
     val focused = touchX?.let { tx -> centers.indices.minByOrNull { abs(centers[it] - tx) } }
     LaunchedEffect(focused) { if (focused != null) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick) }
 
-    Column(modifier.fillMaxWidth()) {
-        // The name of the book under the finger, held while it fades out.
-        var label by remember { mutableStateOf<Pair<LibraryItem, Float>?>(null) }
-        if (focused != null) label = row[focused] to centers[focused]
-        val labelAlpha by animateFloatAsState(if (focused != null) 1f else 0f, tween(if (focused != null) 120 else 240), label = "spineLabel")
-        Box(Modifier.fillMaxWidth().height(Spines.HEADROOM.dp)) {
-            label?.takeIf { labelAlpha > 0f }?.let { (item, x) ->
-                SpineLabel(
-                    item,
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 2.dp)
-                        .graphicsLayer {
-                            alpha = labelAlpha
-                            translationY = 4.dp.toPx() * (1f - labelAlpha)
-                        }
-                        .layout { m, cons ->
-                            val p = m.measure(cons.copy(minWidth = 0))
-                            val left = (x - p.width / 2f).toInt().coerceIn(0, (cons.maxWidth - p.width).coerceAtLeast(0))
-                            layout(cons.maxWidth, p.height) { p.place(left, 0) }
-                        },
-                )
-            }
+    val pulls: List<State<Float>> = books.map { b ->
+        key(b.item.id) {
+            val target = touchX?.let { Spines.pull(abs(centers[b.index] - it), reach) } ?: 0f
+            animateFloatAsState(target, spring(dampingRatio = look.liftDamping, stiffness = look.liftStiffness), label = "pull")
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Spines.GAP.dp),
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(row) {
-                    // One gesture handles the whole shelf: a tap opens the book under the finger, holding
-                    // still opens its options, and once the finger moves it's a scrub, which only browses.
-                    fun nearest(x: Float) = centers.indices.minByOrNull { abs(centers[it] - x) }?.let { row[it] }
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        touchX = down.position.x
-                        var moved = false
-                        var held = false
-                        var released = false
-                        while (true) {
-                            val event = if (moved || held) {
-                                awaitPointerEvent(PointerEventPass.Final)
-                            } else {
-                                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { awaitPointerEvent(PointerEventPass.Final) }
-                            }
-                            if (event == null) {
-                                held = true
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                nearest(touchX ?: down.position.x)?.let { latestLongClick(it) }
-                                continue
-                            }
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) {
-                                released = true
-                                break
-                            }
-                            // The list took the movement as a scroll: let the books settle back.
-                            if (change.isConsumed && change.positionChanged()) {
-                                moved = true
-                                break
-                            }
-                            if (abs(change.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
-                            touchX = change.position.x
-                        }
-                        if (released && !moved && !held) nearest(down.position.x)?.let { latestOpen(it) }
-                        touchX = null
-                    }
-                },
-        ) {
-            row.forEachIndexed { i, item ->
-                val target = touchX?.let { Spines.pull(abs(centers[i] - it), reach) } ?: 0f
-                Spine(item, target, onLongClick = { onLongClick(item) }) { onOpen(item) }
-            }
-        }
-        // The shelf: one firm line.
-        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(1.5.dp)).background(c.label.copy(alpha = 0.88f)))
     }
-}
 
-@Composable
-private fun Spine(item: LibraryItem, pullTarget: Float, onLongClick: () -> Unit, onClick: () -> Unit) {
-    val c = Folio.colors
-    val pull by animateFloatAsState(pullTarget, spring(dampingRatio = 0.9f, stiffness = 320f), label = "pull")
-    val paper = spineColor(rememberCoverColor(item.sourceId, item.thumbnailUrl), c.isDark)
-    val ink = inkFor(paper)
-    val width = Spines.width(item.total).dp
-    val height = Spines.height(item.id).dp
-    val read = (item.total - item.unread).coerceAtLeast(0)
-    val house = Spines.style(item.id)
-
-    Column(
-        Modifier
-            .zIndex(pull)
-            .graphicsLayer { translationY = -9.dp.toPx() * pull }
-            // Touch is handled by the shelf; these keep each book usable with a screen reader.
-            .semantics(mergeDescendants = true) {
-                contentDescription = item.title
-                onClick { onClick(); true }
-                onLongClick { onLongClick(); true }
+    Box(
+        modifier
+            .fillMaxWidth()
+            // Run edge to edge, past the list's margins, and meet the next shelf.
+            .layout { m, cons ->
+                val extra = margin.roundToPx() * 2
+                val p = m.measure(cons.copy(minWidth = cons.maxWidth + extra, maxWidth = cons.maxWidth + extra))
+                val give = if (last) 0 else gridSpacing.roundToPx()
+                layout(cons.maxWidth, (p.height - give).coerceAtLeast(0)) { p.place(-extra / 2, 0) }
             },
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Chapters waiting in something you've started: a small dot above the book, clear of its lettering.
-        Box(Modifier.padding(bottom = 5.dp).size(5.dp).clip(CircleShape).background(if (item.unread > 0 && read > 0) c.accent else Color.Transparent))
-        Box(
-            Modifier
-                .width(width)
-                .height(height)
-                .graphicsLayer {
-                    shape = RoundedCornerShape(topStart = 1.5.dp, topEnd = 1.5.dp)
-                    clip = true
-                    shadowElevation = 6.dp.toPx() * pull
-                }
-                .drawWithCache {
-                    // Barely-there roundness: light along the left edge, a little shade into the right.
-                    val edge = Brush.horizontalGradient(
-                        0f to Color.White.copy(alpha = 0.10f),
-                        0.06f to Color.White.copy(alpha = 0.04f),
-                        0.5f to Color.Transparent,
-                        0.9f to Color.Black.copy(alpha = 0.05f),
-                        1f to Color.Black.copy(alpha = 0.16f),
-                    )
-                    onDrawWithContent {
-                        drawRect(paper)
-                        drawContent()
-                        drawRect(edge)
-                        drawRect(Color.White.copy(alpha = 0.12f), size = Size(size.width, 1.dp.toPx()))
-                    }
-                }
-,
-        ) {
-            Column(Modifier.matchParentSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                // A strip of the cover's art across the head, printed edge to edge as manga spines do.
-                CoverStrip(item, Modifier.fillMaxWidth().height(width * 0.95f))
-                Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 4.dp).padding(top = 9.dp, bottom = 8.dp)) {
-                    SpineLettering(item.title, house, ink, Modifier.align(if (house == 1) Alignment.TopCenter else Alignment.Center).padding(bottom = 18.dp))
-                    if (read > 0) {
-                        BasicText(
-                            if (read > 999) "999+" else read.toString(),
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 9.sp, color = ink.copy(alpha = 0.78f), letterSpacing = 0.02.em),
-                            maxLines = 1,
-                            modifier = Modifier.align(Alignment.BottomCenter),
+        val marginPx = with(density) { margin.toPx() }
+        look.Backdrop(ShelfRow(books, centers.map { it + marginPx }, first, last, dark), Modifier.fillMaxWidth()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = margin)
+                    .padding(top = if (first) look.topPadding else 0.dp, bottom = if (last) look.bottomPadding else gridSpacing),
+            ) {
+                // The name of the book under the finger, held while it fades out.
+                var label by remember { mutableStateOf<Pair<LibraryItem, Float>?>(null) }
+                if (focused != null) label = row[focused] to centers[focused]
+                val labelAlpha by animateFloatAsState(if (focused != null) 1f else 0f, tween(if (focused != null) 120 else 240), label = "spineLabel")
+                Box(Modifier.fillMaxWidth().height(look.headroom)) {
+                    label?.takeIf { labelAlpha > 0f }?.let { (item, x) ->
+                        look.Label(
+                            item, dark,
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(top = 2.dp)
+                                .graphicsLayer {
+                                    alpha = labelAlpha
+                                    translationY = 4.dp.toPx() * (1f - labelAlpha)
+                                }
+                                .layout { m, cons ->
+                                    val p = m.measure(cons.copy(minWidth = 0))
+                                    val left = (x - p.width / 2f).toInt().coerceIn(0, (cons.maxWidth - p.width).coerceAtLeast(0))
+                                    layout(cons.maxWidth, p.height) { p.place(left, 0) }
+                                },
                         )
                     }
                 }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(look.gap.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(1f)
+                        .pointerInput(row) {
+                            // One gesture handles the whole shelf: a tap opens the book under the finger,
+                            // holding still opens its options, and once the finger moves it's a scrub.
+                            fun nearest(x: Float) = centers.indices.minByOrNull { abs(centers[it] - x) }?.let { row[it] }
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                touchX = down.position.x
+                                var moved = false
+                                var held = false
+                                var released = false
+                                while (true) {
+                                    val event = if (moved || held) {
+                                        awaitPointerEvent(PointerEventPass.Final)
+                                    } else {
+                                        withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { awaitPointerEvent(PointerEventPass.Final) }
+                                    }
+                                    if (event == null) {
+                                        held = true
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        nearest(touchX ?: down.position.x)?.let { latestLongClick(it) }
+                                        continue
+                                    }
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) {
+                                        released = true
+                                        break
+                                    }
+                                    // The list took the movement as a scroll: let the books settle back.
+                                    if (change.isConsumed && change.positionChanged()) {
+                                        moved = true
+                                        break
+                                    }
+                                    if (abs(change.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
+                                    touchX = change.position.x
+                                }
+                                if (released && !moved && !held) nearest(down.position.x)?.let { latestOpen(it) }
+                                touchX = null
+                            }
+                        },
+                ) {
+                    books.forEach { b ->
+                        key(b.item.id) {
+                            StandingBook(b, pulls[b.index].value, look, dark, interactive = true, onOpen = { onOpen(b.item) }, onLongClick = { onLongClick(b.item) })
+                        }
+                    }
+                }
+                Box(Modifier.fillMaxWidth().zIndex(look.ledgeZ)) { look.Ledge(dark) }
+                if (look.reflection) Reflection(books, pulls, look, dark)
             }
         }
     }
 }
 
+/** A book standing on the shelf: the new-chapter dot, the lift, and the look's spine. */
 @Composable
-private fun CoverStrip(item: LibraryItem, modifier: Modifier) {
-    val url = item.thumbnailUrl ?: return
-    val context = LocalContext.current
-    val request = remember(item.sourceId, url) {
-        ImageRequest.Builder(context).data(CoverModel(item.sourceId, url)).coverCacheKeys(item.sourceId, url).build()
+private fun StandingBook(b: Book, pull: Float, look: ShelfLook, dark: Boolean, interactive: Boolean, onOpen: () -> Unit = {}, onLongClick: () -> Unit = {}) {
+    Column(
+        Modifier
+            .zIndex(pull)
+            .graphicsLayer {
+                translationX = look.liftDx.dp.toPx() * pull
+                translationY = -look.lift.dp.toPx() * pull + look.liftDy.dp.toPx() * pull
+            }
+            .then(
+                if (interactive) {
+                    // Touch is handled by the shelf; these keep each book usable with a screen reader.
+                    Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = b.item.title
+                        onClick { onOpen(); true }
+                        onLongClick { onLongClick(); true }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Chapters waiting in something you've started: a small dot above the book.
+        val dot = if (interactive && b.item.unread > 0 && b.started) look.dotColor(dark) else Color.Transparent
+        Box(Modifier.padding(bottom = 5.dp).size(5.dp).clip(CircleShape).background(dot))
+        look.Spine(b, pull, dark)
     }
-    AsyncImage(request, null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter, modifier = modifier)
 }
 
-/** The title down the spine, in one of four house styles. */
+/** The row again, upside down and fading, as if on a glossy floor. */
 @Composable
-private fun SpineLettering(title: String, house: Int, ink: Color, modifier: Modifier) {
-    val (style, text, max) = when (house) {
-        // Condensed and bold, the poster voice.
-        0 -> Triple(TextStyle(fontFamily = Display, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.01.em), title, 14.sp)
-        // Small spaced capitals, set from the head.
-        1 -> Triple(TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, letterSpacing = 0.14.em), title.uppercase(), 9.5.sp)
-        // A heavier, rounder heading face.
-        2 -> Triple(TextStyle(fontFamily = Heading, fontWeight = FontWeight.Bold, letterSpacing = 0.em), title, 12.5.sp)
-        // Quiet: plain and light.
-        else -> Triple(TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, letterSpacing = 0.01.em), title, 11.sp)
-    }
-    BasicText(
-        text,
-        style = style.copy(color = ink, lineHeight = 1.0.em),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        autoSize = TextAutoSize.StepBased(minFontSize = smaller(8.sp, max), maxFontSize = max, stepSize = 0.5.sp),
-        modifier = modifier.downward(),
-    )
-}
-
-private fun smaller(a: TextUnit, b: TextUnit): TextUnit = if (a.value <= b.value) a else b
-
-/** The full title and where you are, over the book under your finger. */
-@Composable
-private fun SpineLabel(item: LibraryItem, modifier: Modifier) {
-    val c = Folio.colors
-    Column(modifier.widthIn(max = 260.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(item.title, style = Folio.type.footnoteStrong, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            when {
-                item.total == 0 -> "Not checked yet"
-                item.unread == item.total -> "Not started · ${item.total} chapters"
-                item.unread == 0 -> "Up to date · ${item.total} chapters"
-                else -> "${item.unread} unread · ${item.total} chapters"
+private fun Reflection(books: List<Book>, pulls: List<State<Float>>, look: ShelfLook, dark: Boolean) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clipToBounds()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.32f), Color.Transparent)), blendMode = BlendMode.DstIn)
             },
-            style = Folio.type.caption2, color = if (item.unread in 1 until item.total) c.accent else c.secondaryLabel, maxLines = 1,
-        )
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(look.gap.dp),
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier
+                .wrapContentHeight(Alignment.Top, unbounded = true)
+                .padding(top = 3.dp)
+                .graphicsLayer { scaleY = -1f },
+        ) {
+            books.forEach { b -> key(b.item.id) { StandingBook(b, pulls[b.index].value, look, dark, interactive = false) } }
+        }
     }
 }
 
-/**
- * A cover's colour as a printed spine: rich enough to have presence, never neon, washed out or muddy.
- * Near-greys stay grey.
- */
-private fun spineColor(cover: Color?, dark: Boolean): Color {
-    if (cover == null) return if (dark) Color(0xFF3B3833) else Color(0xFFCFC8BE)
-    val hsl = FloatArray(3)
-    ColorUtils.colorToHSL(cover.toArgb(), hsl)
-    if (hsl[1] > 0.1f) hsl[1] = hsl[1].coerceIn(0.28f, 0.62f)
-    hsl[2] = hsl[2].coerceIn(if (dark) 0.24f else 0.3f, if (dark) 0.62f else 0.72f)
-    return Color(ColorUtils.HSLToColor(hsl))
+/** Default label: the full title and where you are. */
+@Composable
+internal fun ShelfLabel(item: LibraryItem, title: Color, meta: Color, accent: Color, modifier: Modifier, titleStyle: TextStyle = Folio.type.footnoteStrong) {
+    Column(modifier.widthIn(max = 260.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(item.title, style = titleStyle, color = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(shelfMeta(item), style = Folio.type.caption2, color = if (item.unread in 1 until item.total) accent else meta, maxLines = 1)
+    }
 }
 
-private val LightInk = Color(0xFFFAF7F1)
-private val DarkInk = Color(0xFF15120E)
-
-/** Whichever ink reads better on [paper], by contrast ratio. */
-private fun inkFor(paper: Color): Color {
-    val l = paper.luminance()
-    val onLight = (l + 0.05f) / (DarkInk.luminance() + 0.05f)
-    val onDark = (LightInk.luminance() + 0.05f) / (l + 0.05f)
-    return if (onDark >= onLight) LightInk else DarkInk
+internal fun shelfMeta(item: LibraryItem): String = when {
+    item.total == 0 -> "Not checked yet"
+    item.unread == item.total -> "Not started · ${item.total} chapters"
+    item.unread == 0 -> "Up to date · ${item.total} chapters"
+    else -> "${item.unread} unread · ${item.total} chapters"
 }
 
 /** Turns content to run top to bottom, like the title on an English-language spine. */
-private fun Modifier.downward() = layout { measurable, constraints ->
+internal fun Modifier.downward() = layout { measurable, constraints ->
     val p = measurable.measure(Constraints(maxWidth = constraints.maxHeight, maxHeight = constraints.maxWidth))
     layout(p.height, p.width) {
         p.placeWithLayer((p.height - p.width) / 2, (p.width - p.height) / 2) { rotationZ = 90f }
+    }
+}
+
+/** Picks how the bookcase looks, switching live. */
+@Composable
+internal fun ShelfStyleSheet(current: ShelfStyle, onPick: (ShelfStyle) -> Unit, onDismiss: () -> Unit) {
+    val c = Folio.colors
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.elevated) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 28.dp)) {
+            Text("Shelf style", style = Folio.type.title3, color = c.label, modifier = Modifier.padding(horizontal = 20.dp))
+            Spacer(Modifier.height(10.dp))
+            ShelfStyle.entries.forEach { style ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .pressable(onClick = { onPick(style) })
+                        .padding(horizontal = 20.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(style.label, style = Folio.type.headline, color = c.label)
+                        Text(style.blurb, style = Folio.type.footnote, color = c.secondaryLabel)
+                    }
+                    if (style == current) {
+                        Spacer(Modifier.width(12.dp))
+                        Icon(Icons.Rounded.Check, null, tint = c.accent)
+                    }
+                }
+            }
+        }
     }
 }
