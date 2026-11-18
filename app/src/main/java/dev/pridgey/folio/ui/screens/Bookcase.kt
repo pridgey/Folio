@@ -72,20 +72,23 @@ import dev.pridgey.folio.ui.theme.rememberCoverColor
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
-import kotlin.math.min
+import kotlin.math.sqrt
 
 // The library as books on shelves. This file is the shelf's behaviour, shared by every look: filling
 // rows, scrubbing (books near the finger rise, the one under it is named), tap and hold, and the
 // lift's spring. What the books, shelf and wall look like comes from a ShelfLook (see ShelfLooks*.kt).
 
 internal object Spines {
-    private const val MIN_WIDTH = 30f
-    private const val MAX_WIDTH = 36f
+    private const val MIN_WIDTH = 26f
+    private const val MAX_WIDTH = 46f
     const val TALLEST = 184
 
-    /** Longer series are a touch thicker: grows quickly at first and stops at about 300 chapters. */
+    /**
+     * Thicker for longer series, and still growing into the thousands: a one-shot is slim, a 400-chapter
+     * series middling, a 1,500-chapter one about as thick as they come.
+     */
     fun width(chapters: Int): Float {
-        val t = min(1.0, ln(1.0 + chapters.coerceAtLeast(0)) / ln(301.0)).toFloat()
+        val t = sqrt(chapters.coerceAtLeast(0) / 1500f).coerceAtMost(1f)
         return MIN_WIDTH + (MAX_WIDTH - MIN_WIDTH) * t
     }
 

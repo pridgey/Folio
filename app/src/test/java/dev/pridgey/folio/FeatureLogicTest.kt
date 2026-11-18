@@ -149,6 +149,25 @@ class FeatureLogicTest {
         // Most books stay plain; the finishes are accents.
         assertTrue(recipes.count { it.finish == dev.pridgey.folio.ui.screens.Finish.PLAIN } > recipes.size * 0.6)
         // A sideways cover always keeps its title in the band, clear of the logo.
-        assertTrue(recipes.filter { it.frame == dev.pridgey.folio.ui.screens.ArtFrame.SIDEWAYS }.all { it.spot == dev.pridgey.folio.ui.screens.TitleSpot.BAND })
+        assertTrue(recipes.filter { it.frame == dev.pridgey.folio.ui.screens.ArtFrame.SIDEWAYS }.all { it.spot == dev.pridgey.folio.ui.screens.TitleSpot.FROST })
+    }
+
+    @Test fun longTitlesBecomeInitials() {
+        fun f(t: String) = dev.pridgey.folio.ui.screens.spineText(t)
+        assertEquals("ORV", f("Omniscient Reader's Viewpoint").text)
+        assertEquals("TBATE", f("The Beginning After the End").text)
+        assertEquals("ACAGS", f("All-Class Awakening: God Slayer").text)
+        // Bracketed asides go first; short titles stay whole.
+        assertEquals(dev.pridgey.folio.ui.screens.SpineText("Overgeared", false), f("Overgeared (Team Argo)"))
+        assertEquals(dev.pridgey.folio.ui.screens.SpineText("The Remarried Empress", false), f("The Remarried Empress"))
+        // Too many words for a tidy set of initials: keep the title.
+        assertFalse(f("I Became the Tyrant's Secretary and Then Some More Words").initials)
+    }
+
+    @Test fun spineWidthsKeepGrowingWithLongSeries() {
+        fun w(c: Int) = dev.pridgey.folio.ui.screens.Spines.width(c)
+        assertTrue(w(1540) - w(475) >= 6f)
+        assertTrue(w(475) - w(40) >= 6f)
+        assertEquals(w(1500), w(5000), 0.001f)
     }
 }

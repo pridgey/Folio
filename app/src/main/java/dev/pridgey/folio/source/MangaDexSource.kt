@@ -155,6 +155,19 @@ class MangaDexSource(baseClient: OkHttpClient, private val json: Json, private v
         return MangasPage(mangas, body.offset + body.data.size < body.total)
     }
 
+    /**
+     * Every cover a series has had, one per volume (oldest first), as image URLs. Used for spine art,
+     * which looks better with a choice than with the one thumbnail a source gives.
+     */
+    suspend fun volumeCovers(mangaId: String): List<String> {
+        val url = "$API/cover".toHttpUrl().newBuilder()
+            .addQueryParameter("manga[]", mangaId)
+            .addQueryParameter("limit", "100")
+            .addQueryParameter("order[volume]", "asc")
+            .build()
+        return get<CoverList>(url).data.mapNotNull { c -> c.attributes.fileName?.let { "https://uploads.mangadex.org/covers/$mangaId/$it.512.jpg" } }
+    }
+
     override fun filters() = FilterList(
         SortFilter(),
         StatusFilter(),
@@ -246,6 +259,12 @@ class MangaDexSource(baseClient: OkHttpClient, private val json: Json, private v
     @Serializable private class MangaList(val data: List<MangaData> = emptyList(), val offset: Int = 0, val total: Int = 0)
 
     @Serializable private class MangaOne(val data: MangaData)
+
+    @Serializable private class CoverList(val data: List<CoverData> = emptyList())
+
+    @Serializable private class CoverData(val attributes: CoverAttributes)
+
+    @Serializable private class CoverAttributes(val fileName: String? = null, val volume: String? = null)
 
     @Serializable
     private class MangaData(val id: String, val attributes: MangaAttributes, val relationships: List<Relationship> = emptyList())

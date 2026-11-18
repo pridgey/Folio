@@ -50,6 +50,8 @@ object Graph {
         private set
     lateinit var downloads: Downloads
         private set
+    lateinit var spineArt: dev.pridgey.folio.data.SpineArt
+        private set
 
     @OptIn(ExperimentalSerializationApi::class)
     fun init(app: Application) {
@@ -69,6 +71,7 @@ object Graph {
         sources = SourceManager(extensions, MangaDexSource(network.client, json) { settings.current.language }, settings, SourceLog(app, json, scope))
         library = LibraryRepository(db, sources, json)
         downloads = Downloads(app, db, sources, library)
+        spineArt = dev.pridgey.folio.data.SpineArt(app, sources.mangaDex, scope)
     }
 }
 
