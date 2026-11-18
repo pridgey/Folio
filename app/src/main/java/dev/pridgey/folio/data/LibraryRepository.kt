@@ -7,6 +7,8 @@ import dev.pridgey.folio.source.TitleMatcher
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -25,8 +27,14 @@ class LibraryRepository(
     fun favoriteKeys(): Flow<List<String>> = manga.favoriteKeys()
     fun observe(id: Long): Flow<MangaEntity?> = manga.observe(id)
     fun observeChapters(id: Long): Flow<List<ChapterEntity>> = chapters.observeForManga(id)
-    fun recentlyRead(limit: Int = 200): Flow<List<ReadingEntry>> = chapters.recentlyRead(limit)
-    fun updates(): Flow<List<UpdateEntry>> = chapters.updates()
+    /** Titles on private shelves. */
+    fun hiddenTitles(): Flow<Set<Long>> = shelfDao.hiddenTitles().map { it.toSet() }
+
+    // Reading on a private shelf is incognito: it never shows in history, Continue reading or Updates.
+    fun recentlyRead(limit: Int = 200): Flow<List<ReadingEntry>> =
+        combine(chapters.recentlyRead(limit), hiddenTitles()) { list, hidden -> list.filter { it.mangaId !in hidden } }
+    fun updates(): Flow<List<UpdateEntry>> =
+        combine(chapters.updates(), hiddenTitles()) { list, hidden -> list.filter { it.mangaId !in hidden } }
     fun newSince(since: Long): Flow<Int> = chapters.newSince(since)
 
     suspend fun get(id: Long) = manga.get(id)
@@ -152,8 +160,9 @@ class LibraryRepository(
     fun shelves(): Flow<List<ShelfEntity>> = shelfDao.observe()
     fun shelfMembers(): Flow<List<ShelfManga>> = shelfDao.observeMembers()
     fun shelvesOf(mangaId: Long): Flow<List<Long>> = shelfDao.observeFor(mangaId)
-    suspend fun createShelf(name: String): Long = shelfDao.insert(ShelfEntity(name = name.trim(), position = shelfDao.nextPosition()))
-    suspend fun renameShelf(id: Long, name: String) = shelfDao.rename(id, name.trim())
+    suspend fun createShelf(name: String, hidden: Boolean = false): Long =
+        shelfDao.insert(ShelfEntity(name = name.trim(), position = shelfDao.nextPosition(), hidden = hidden))
+    suspend fun editShelf(id: Long, name: String, hidden: Boolean) = shelfDao.edit(id, name.trim(), hidden)
     suspend fun deleteShelf(id: Long) = shelfDao.delete(id)
     suspend fun addToShelf(shelfId: Long, mangaIds: Collection<Long>) = shelfDao.add(mangaIds.map { ShelfManga(shelfId, it) })
     suspend fun removeFromShelf(shelfId: Long, mangaId: Long) = shelfDao.remove(shelfId, mangaId)
@@ -219,7 +228,12 @@ class LibraryRepository(
     // ------------------------------------------------------------------ Backup
 
     @Serializable
-    data class Backup(val version: Int = 1, val titles: List<BackupTitle>, val shelves: List<String> = emptyList())
+    data class Backup(
+        val version: Int = 1,
+        val titles: List<BackupTitle>,
+        val shelves: List<String> = emptyList(),
+        val privateShelves: List<String> = emptyList(),
+    )
 
     @Serializable
     data class BackupTitle(
@@ -239,7 +253,8 @@ class LibraryRepository(
     data class BackupChapter(val url: String, val read: Boolean, val lastPageRead: Int = 0, val bookmark: Boolean = false, val lastReadAt: Long = 0)
 
     suspend fun exportBackup(): String {
-        val shelfNames = shelfDao.all().associate { it.id to it.name }
+        val allShelves = shelfDao.all()
+        val shelfNames = allShelves.associate { it.id to it.name }
         val titles = manga.favorites().map { m ->
             BackupTitle(
                 m.sourceId, m.url, m.title, m.thumbnailUrl, m.readerMode, m.dateAdded,
@@ -249,7 +264,10 @@ class LibraryRepository(
                 shelves = shelfDao.shelvesOf(m.id).mapNotNull { shelfNames[it] },
             )
         }
-        return json.encodeToString(Backup.serializer(), Backup(titles = titles, shelves = shelfNames.values.toList()))
+        return json.encodeToString(
+            Backup.serializer(),
+            Backup(titles = titles, shelves = shelfNames.values.toList(), privateShelves = allShelves.filter { it.hidden }.map { it.name }),
+        )
     }
 
     /** Restores titles and progress. Chapters are matched once each title is refreshed. */
@@ -258,7 +276,7 @@ class LibraryRepository(
         // Shelves match by name, so restoring twice doesn't double them up.
         val shelfIds = shelfDao.all().associate { it.name to it.id }.toMutableMap()
         (backup.shelves + backup.titles.flatMap { it.shelves }).distinct().forEach { name ->
-            if (name !in shelfIds) shelfIds[name] = createShelf(name)
+            if (name !in shelfIds) shelfIds[name] = createShelf(name, hidden = name in backup.privateShelves)
         }
         var count = 0
         for (t in backup.titles) {

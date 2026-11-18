@@ -49,6 +49,7 @@ class ReaderActivity : ComponentActivity() {
         setContent {
             val settings = Graph.settings.current
             FolioTheme(settings.theme, settings.accent, forceDark = true) {
+              dev.pridgey.folio.ui.LockGate {
                 ReaderScreen(
                     vm, pageKeys, onExit = { finish() }, onChromeVisible = ::showSystemBars,
                     onOpenTitle = { mangaId, sourceId ->
@@ -56,6 +57,7 @@ class ReaderActivity : ComponentActivity() {
                         finish()
                     },
                 )
+              }
             }
         }
     }

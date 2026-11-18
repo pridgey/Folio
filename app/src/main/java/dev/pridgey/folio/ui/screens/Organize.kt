@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -112,6 +113,10 @@ fun OrganizeSheet(mangaId: Long, title: String, onDismiss: () -> Unit) {
                     Icon(if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked, null, tint = if (checked) c.accent else c.tertiaryLabel)
                     Spacer(Modifier.width(12.dp))
                     Text(shelf.name, style = Folio.type.body, color = c.label)
+                    if (shelf.hidden) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Rounded.Lock, "Private", tint = c.tertiaryLabel, modifier = Modifier.size(16.dp))
+                    }
                 }
             }
             Row(
@@ -125,10 +130,10 @@ fun OrganizeSheet(mangaId: Long, title: String, onDismiss: () -> Unit) {
         }
     }
     if (naming) {
-        ShelfNameDialog("New shelf", "", onDismiss = { naming = false }) { name ->
+        ShelfNameDialog("New shelf", "", onDismiss = { naming = false }) { name, hidden ->
             naming = false
             scope.launch {
-                val id = Graph.library.createShelf(name)
+                val id = Graph.library.createShelf(name, hidden)
                 Graph.library.addToShelf(id, listOf(mangaId))
                 if (manga?.favorite == false) Graph.library.setFavorite(mangaId, true)
             }
@@ -137,17 +142,39 @@ fun OrganizeSheet(mangaId: Long, title: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun ShelfNameDialog(heading: String, initial: String, onDismiss: () -> Unit, onDelete: (() -> Unit)? = null, onConfirm: (String) -> Unit) {
+fun ShelfNameDialog(
+    heading: String,
+    initial: String,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+    initialHidden: Boolean = false,
+    onConfirm: (name: String, hidden: Boolean) -> Unit,
+) {
     val c = Folio.colors
     var name by remember { mutableStateOf(initial) }
+    var hidden by remember { mutableStateOf(initialHidden) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = c.elevated,
         title = { Text(heading, style = Folio.type.headline) },
         text = {
-            OutlinedTextField(name, { name = it.take(40) }, singleLine = true, placeholder = { Text("Shelf name") }, modifier = Modifier.fillMaxWidth())
+            Column {
+                OutlinedTextField(name, { name = it.take(40) }, singleLine = true, placeholder = { Text("Shelf name") }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Private", style = Folio.type.body, color = c.label)
+                        Text(
+                            "Hidden from your library, history and updates. Opens with your fingerprint or screen lock.",
+                            style = Folio.type.caption, color = c.secondaryLabel,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    dev.pridgey.folio.ui.components.FolioSwitch(hidden, { hidden = it })
+                }
+            }
         },
-        confirmButton = { TextButton({ if (name.isNotBlank()) onConfirm(name) }, enabled = name.isNotBlank()) { Text("Save") } },
+        confirmButton = { TextButton({ if (name.isNotBlank()) onConfirm(name, hidden) }, enabled = name.isNotBlank()) { Text("Save") } },
         dismissButton = {
             Row {
                 if (onDelete != null) TextButton(onDelete) { Text("Delete shelf", color = c.danger) }
@@ -190,7 +217,9 @@ fun LibraryFilterBar(
         items(shelves, key = { "shelf-${it.id}" }) { shelf ->
             val isSelected = selected == LibraryFilter.Shelf(shelf.id)
             Box(Modifier.pressable(onClick = { onSelect(LibraryFilter.Shelf(shelf.id)) }, onLongClick = { onEditShelf(shelf) }, pressedScale = 0.97f)) {
-                Chip("${shelf.name} ${counts[shelf.id] ?: 0}", selected = isSelected)
+                // A private shelf keeps its size to itself.
+                if (shelf.hidden) Chip(shelf.name, selected = isSelected, leading = Icons.Rounded.Lock)
+                else Chip("${shelf.name} ${counts[shelf.id] ?: 0}", selected = isSelected)
             }
         }
         item { Chip("Shelf", leading = Icons.Rounded.Add, onClick = onNewShelf) }

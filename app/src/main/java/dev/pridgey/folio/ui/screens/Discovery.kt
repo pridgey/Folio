@@ -479,7 +479,9 @@ object Recommender {
      */
     suspend fun forYou(seeds: Int = 2): List<Recommendation> {
         val dex = Graph.sources.mangaDex
-        val library = Graph.library.library().first()
+        // Private titles never seed recommendations: they'd show up on Discover.
+        val hidden = Graph.library.hiddenTitles().first()
+        val library = Graph.library.library().first().filter { it.id !in hidden }
         if (library.isEmpty()) return emptyList()
         val owned = library.map { TitleMatcher.normalize(it.title) }.toHashSet()
         val weights = Graph.library.genreWeights().toMap()

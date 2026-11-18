@@ -172,8 +172,11 @@ interface ShelfDao {
     @Insert
     suspend fun insert(shelf: ShelfEntity): Long
 
-    @Query("UPDATE shelf SET name = :name WHERE id = :id")
-    suspend fun rename(id: Long, name: String)
+    @Query("UPDATE shelf SET name = :name, hidden = :hidden WHERE id = :id")
+    suspend fun edit(id: Long, name: String, hidden: Boolean)
+
+    @Query("SELECT DISTINCT sm.mangaId FROM shelf_manga sm JOIN shelf s ON s.id = sm.shelfId WHERE s.hidden = 1")
+    fun hiddenTitles(): Flow<List<Long>>
 
     @Query("DELETE FROM shelf WHERE id = :id")
     suspend fun delete(id: Long)

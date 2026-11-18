@@ -1,10 +1,13 @@
 package dev.pridgey.folio.ui.screens
 
 import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Timer
 import dev.pridgey.folio.data.DownloadPace
+import dev.pridgey.folio.ui.AppLock
 
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Crop
@@ -210,6 +213,30 @@ fun SettingsTab(glass: GlassState) {
             }
 
             item {
+                val activity = context as? android.app.Activity
+                GroupedSection(
+                    header = "Privacy",
+                    footer = if (AppLock.canLock(context)) "Private shelves keep titles out of your library, history and updates."
+                    else "Set a screen lock on your phone to lock Folio.",
+                ) {
+                    ToggleRow("Lock Folio", s.appLock, { v ->
+                        // Prove it's you before turning it off, and that unlocking works before turning it on.
+                        if (activity != null && AppLock.canLock(context)) {
+                            AppLock.authenticate(activity, if (v) "Turn on app lock" else "Turn off app lock") { ok ->
+                                if (ok) { update { it.copy(appLock = v) }; AppLock.secureRecents(activity) }
+                            }
+                        }
+                    }, icon = Icons.Rounded.Lock, iconBackground = Blue)
+                    if (s.appLock) {
+                        GroupedDivider(59.dp)
+                        MenuRow(
+                            "Lock after", Icons.Rounded.Timer, Gray, lockLabel(s.lockAfterSeconds), listOf(0, 60, 300, 900), ::lockLabel,
+                        ) { sec -> update { it.copy(lockAfterSeconds = sec) } }
+                    }
+                }
+            }
+
+            item {
                 val mf = extensions[ExtensionManager.MANGAFIRE]
                 GroupedSection(header = "Sources") {
                     GroupedRow(
@@ -248,6 +275,12 @@ fun SettingsTab(glass: GlassState) {
 }
 
 private fun aheadLabel(n: Int) = if (n == 0) "Off" else "$n chapters"
+
+private fun lockLabel(sec: Int) = when (sec) {
+    0 -> "Right away"
+    60 -> "After 1 minute"
+    else -> "After ${sec / 60} minutes"
+}
 
 private fun intervalLabel(h: Int) = when (h) {
     0 -> "Never"

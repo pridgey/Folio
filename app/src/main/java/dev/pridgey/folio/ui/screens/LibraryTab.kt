@@ -75,6 +75,7 @@ import dev.pridgey.folio.Graph
 import dev.pridgey.folio.data.LibraryItem
 import dev.pridgey.folio.data.LibrarySort
 import dev.pridgey.folio.data.ReadingStatus
+import dev.pridgey.folio.ui.AppLock
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import dev.pridgey.folio.data.ReadingEntry
@@ -105,6 +106,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class LibraryViewModel : ViewModel() {
+    private val visible = combine(Graph.library.library(), Graph.library.hiddenTitles()) { list, hidden -> list to hidden }
+
     val query = MutableStateFlow("")
     val filter = MutableStateFlow<LibraryFilter>(LibraryFilter.All)
     val shelves = Graph.library.shelves().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -114,10 +117,12 @@ class LibraryViewModel : ViewModel() {
         m.filter { it.mangaId in ids }.groupingBy { it.shelfId }.eachCount()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    /** The whole library, for the filter bar's counts. */
-    val all = Graph.library.library().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** The library minus private titles, for the filter bar's counts. */
+    val all = visible.map { (list, hidden) -> list.filter { it.id !in hidden } }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val items = combine(Graph.library.library(), Graph.settings.values, query, filter, members) { list, settings, q, f, m ->
+    val items = combine(visible, Graph.settings.values, query, filter, members) { (all, hidden), settings, q, f, m ->
+        // Private titles only appear inside their own shelf.
+        val list = if (f is LibraryFilter.Shelf) all else all.filter { it.id !in hidden }
         val scoped = when (f) {
             LibraryFilter.All -> list
             is LibraryFilter.Status -> list.filter { ReadingStatus.of(it.readingStatus) == f.status }
@@ -191,7 +196,16 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                         if (whole.isNotEmpty()) {
                             Spacer(Modifier.height(10.dp))
                             LibraryFilterBar(
-                                whole, shelves, shelfCounts, filter, onSelect = { vm.filter.value = it },
+                                whole, shelves, shelfCounts, filter,
+                                onSelect = { f ->
+                                    val private = (f as? LibraryFilter.Shelf)?.let { s -> shelves.firstOrNull { it.id == s.id }?.hidden } == true
+                                    val activity = context as? android.app.Activity
+                                    if (private && !AppLock.privateOpen.value && activity != null) {
+                                        AppLock.authenticate(activity, "Open private shelf") { ok -> if (ok) { AppLock.openPrivate(); vm.filter.value = f } }
+                                    } else {
+                                        vm.filter.value = f
+                                    }
+                                },
                                 onNewShelf = { newShelf = true }, onEditShelf = { editing = it },
                             )
                         }
@@ -337,15 +351,19 @@ private fun LibraryDialogs(
     val scope = rememberCoroutineScope()
     organizing?.let { OrganizeSheet(it.id, it.title, onDismiss = onOrganized) }
     if (newShelf) {
-        ShelfNameDialog("New shelf", "", onDismiss = { onNewShelfDone(null) }) { name ->
-            scope.launch { onNewShelfDone(Graph.library.createShelf(name)) }
+        ShelfNameDialog("New shelf", "", onDismiss = { onNewShelfDone(null) }) { name, hidden ->
+            scope.launch {
+                if (hidden) AppLock.openPrivate()
+                onNewShelfDone(Graph.library.createShelf(name, hidden))
+            }
         }
     }
     editing?.let { shelf ->
         ShelfNameDialog(
-            "Rename shelf", shelf.name, onDismiss = onEditDone,
+            "Edit shelf", shelf.name, onDismiss = onEditDone,
             onDelete = { scope.launch { Graph.library.deleteShelf(shelf.id) }; onDeleted(shelf.id); onEditDone() },
-        ) { name -> scope.launch { Graph.library.renameShelf(shelf.id, name) }; onEditDone() }
+            initialHidden = shelf.hidden,
+        ) { name, hidden -> scope.launch { Graph.library.editShelf(shelf.id, name, hidden) }; onEditDone() }
     }
 }
 

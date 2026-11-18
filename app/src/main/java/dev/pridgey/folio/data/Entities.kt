@@ -48,6 +48,8 @@ data class ShelfEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val position: Int = 0,
+    /** A private shelf: its titles stay out of the library, history and updates, and open with the phone's lock. */
+    @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
 )
 
 @Entity(

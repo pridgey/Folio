@@ -65,6 +65,10 @@ class Settings(context: Context) {
         /** Keep this many unread chapters downloaded ahead of where you are; 0 is off. */
         val downloadAhead: Int = 0,
         val downloadPace: DownloadPace = DownloadPace.BALANCED,
+        /** Ask for the fingerprint or device PIN when Folio opens. */
+        val appLock: Boolean = false,
+        /** How long Folio can be in the background before it locks again, in seconds. */
+        val lockAfterSeconds: Int = 60,
         val updateIntervalHours: Int = 12,
         val updateOnlyOnWifi: Boolean = true,
         val notifyNewChapters: Boolean = true,
@@ -115,6 +119,8 @@ class Settings(context: Context) {
             autoCrop = getBoolean("autoCrop", d.autoCrop),
             downloadAhead = getInt("downloadAhead", d.downloadAhead),
             downloadPace = enum("downloadPace", d.downloadPace),
+            appLock = getBoolean("appLock", d.appLock),
+            lockAfterSeconds = getInt("lockAfterSeconds", d.lockAfterSeconds),
             updateIntervalHours = getInt("updateIntervalHours", d.updateIntervalHours),
             updateOnlyOnWifi = getBoolean("updateOnlyOnWifi", d.updateOnlyOnWifi),
             notifyNewChapters = getBoolean("notifyNewChapters", d.notifyNewChapters),
@@ -150,6 +156,8 @@ class Settings(context: Context) {
         .putBoolean("autoCrop", v.autoCrop)
         .putInt("downloadAhead", v.downloadAhead)
         .putString("downloadPace", v.downloadPace.name)
+        .putBoolean("appLock", v.appLock)
+        .putInt("lockAfterSeconds", v.lockAfterSeconds)
         .putInt("updateIntervalHours", v.updateIntervalHours)
         .putBoolean("updateOnlyOnWifi", v.updateOnlyOnWifi)
         .putBoolean("notifyNewChapters", v.notifyNewChapters)

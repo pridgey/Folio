@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             FolioTheme(settings.theme, settings.accent) {
-                FolioNavHost(this)
+                LockGate { FolioNavHost(this) }
             }
         }
         Updater.checkIfDue(this)

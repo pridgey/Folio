@@ -23,6 +23,7 @@ open class FolioApp : Application(), SingletonImageLoader.Factory {
         // The crash screen's process only shows a report; it doesn't start the app.
         if (CrashReporter.isCrashProcess()) return
         Graph.init(this)
+        dev.pridgey.folio.ui.AppLock.install(this)
         Notifications.createChannels(this)
         Graph.scope.launch {
             Graph.extensions.loadInstalled()
