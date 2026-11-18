@@ -261,13 +261,36 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     }
                 } else if (list != null && list.isEmpty() && query.isBlank()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
-                        EmptyState(
-                            icon = Icons.Rounded.AutoStories,
-                            title = "Your library is empty",
-                            message = "Titles you add show up here, with new chapters checked for you in the background.",
-                            action = "Discover manga",
-                            onAction = onDiscover,
-                        )
+                        // Reading a title doesn't add it, so Continue reading can show titles the library doesn't have.
+                        val reading = recent.distinctBy { it.mangaId }
+                        val scope = rememberCoroutineScope()
+                        when {
+                            reading.size == 1 -> EmptyState(
+                                icon = Icons.Rounded.AutoStories,
+                                title = "Nothing saved yet",
+                                message = "You're reading ${reading[0].title}, but it isn't in your library. Add it to see it here, on the bookcase and on shelves, and to get its new chapters.",
+                                action = "Add to Library",
+                                onAction = { scope.launch { Graph.library.setFavorite(reading[0].mangaId, true) } },
+                                secondaryAction = "Discover manga",
+                                onSecondaryAction = onDiscover,
+                            )
+                            reading.size > 1 -> EmptyState(
+                                icon = Icons.Rounded.AutoStories,
+                                title = "Nothing saved yet",
+                                message = "The titles under Continue reading aren't in your library. Add them to see them here and get their new chapters.",
+                                action = "Add all ${reading.size}",
+                                onAction = { scope.launch { reading.forEach { Graph.library.setFavorite(it.mangaId, true) } } },
+                                secondaryAction = "Discover manga",
+                                onSecondaryAction = onDiscover,
+                            )
+                            else -> EmptyState(
+                                icon = Icons.Rounded.AutoStories,
+                                title = "Your library is empty",
+                                message = "Titles you add show up here, with new chapters checked for you in the background.",
+                                action = "Discover manga",
+                                onAction = onDiscover,
+                            )
+                        }
                     }
                 } else if (list != null) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "heading") {
