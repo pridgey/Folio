@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -173,9 +174,9 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
     var newShelf by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<dev.pridgey.folio.data.ShelfEntity?>(null) }
     if (refreshing && sync == null) refreshing = false
-    // Shelves span the screen inside the grid's 16dp margins, less the first book's inset.
+    // Books stand inside the grid's 16dp margins and the bookcase's frame.
     val density = LocalDensity.current
-    val bookcaseWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value } - 32f - 4f
+    val bookcaseWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value } - 32f - 2f * Spines.FRAME
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
@@ -309,8 +310,11 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                     }
                     if (settings.bookcase) {
                         val rows = Spines.rows(list, available = bookcaseWidth)
-                        items(rows, key = { "shelf-row-${it.first().id}" }, span = { GridItemSpan(maxLineSpan) }) { row ->
-                            BookcaseShelf(row, Modifier.animateItem(), onLongClick = { organizing = it }) { item ->
+                        itemsIndexed(rows, key = { _, row -> "shelf-row-${row.first().id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, row ->
+                            BookcaseShelf(
+                                row, first = i == 0, joinBelow = i < rows.lastIndex, gridSpacing = 18,
+                                modifier = Modifier.animateItem(), onLongClick = { organizing = it },
+                            ) { item ->
                                 nav.details(item.id, item.sourceId, item.thumbnailUrl)
                             }
                         }
