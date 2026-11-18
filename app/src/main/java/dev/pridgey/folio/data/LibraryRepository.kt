@@ -147,6 +147,9 @@ class LibraryRepository(
 
     suspend fun pruneUnused() = manga.pruneUnused()
 
+    /** Adds titles you've finished a chapter of, as reading one does from now on. */
+    suspend fun addFinished(): Int = manga.addFinished(System.currentTimeMillis())
+
     // ------------------------------------------------------------------ Status and shelves
 
     suspend fun setReadingStatus(id: Long, status: ReadingStatus) = manga.setReadingStatus(id, status.ordinal)

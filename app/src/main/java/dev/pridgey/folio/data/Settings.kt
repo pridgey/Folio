@@ -74,6 +74,10 @@ class Settings(context: Context) {
         val notifyNewChapters: Boolean = true,
         val autoDownload: Boolean = false,
         val deleteAfterRead: Boolean = false,
+        /** Finishing a chapter of a title adds it to the library. */
+        val autoAddToLibrary: Boolean = true,
+        /** Titles read before auto-add existed have been added, once. */
+        val autoAddBackfilled: Boolean = false,
         val librarySort: LibrarySort = LibrarySort.LAST_READ,
         val libraryColumns: Int = 3,
         /** Library as spines on a bookcase instead of a cover grid. */
@@ -128,6 +132,8 @@ class Settings(context: Context) {
             notifyNewChapters = getBoolean("notifyNewChapters", d.notifyNewChapters),
             autoDownload = getBoolean("autoDownload", d.autoDownload),
             deleteAfterRead = getBoolean("deleteAfterRead", d.deleteAfterRead),
+            autoAddToLibrary = getBoolean("autoAddToLibrary", d.autoAddToLibrary),
+            autoAddBackfilled = getBoolean("autoAddBackfilled", d.autoAddBackfilled),
             librarySort = enum("librarySort", d.librarySort),
             libraryColumns = getInt("libraryColumns", d.libraryColumns),
             bookcase = getBoolean("bookcase", d.bookcase),
@@ -166,6 +172,8 @@ class Settings(context: Context) {
         .putBoolean("notifyNewChapters", v.notifyNewChapters)
         .putBoolean("autoDownload", v.autoDownload)
         .putBoolean("deleteAfterRead", v.deleteAfterRead)
+        .putBoolean("autoAddToLibrary", v.autoAddToLibrary)
+        .putBoolean("autoAddBackfilled", v.autoAddBackfilled)
         .putString("librarySort", v.librarySort.name)
         .putInt("libraryColumns", v.libraryColumns)
         .putBoolean("bookcase", v.bookcase)

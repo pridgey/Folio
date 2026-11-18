@@ -1,6 +1,7 @@
 package dev.pridgey.folio.reader
 
 import android.app.Application
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import coil3.SingletonImageLoader
@@ -166,6 +167,13 @@ class ReaderViewModel(app: Application, private var mangaId: Long, startChapterI
     }
 
     private suspend fun onFinished(chapter: ChapterEntity) {
+        // Finishing a chapter means you're really reading it: keep it, unless that's turned off.
+        val manga = _state.value.manga
+        if (manga != null && !manga.favorite && Graph.settings.current.autoAddToLibrary) {
+            repo.setFavorite(manga.id, true)
+            _state.update { s -> s.copy(manga = s.manga?.copy(favorite = true)) }
+            Toast.makeText(getApplication(), "Added ${manga.title} to your library", Toast.LENGTH_SHORT).show()
+        }
         if (Graph.settings.current.deleteAfterRead && chapter.id in Graph.downloads.downloaded.value) {
             Graph.downloads.delete(mangaId, listOf(chapter.id))
         }

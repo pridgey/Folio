@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Info
@@ -180,7 +181,9 @@ fun SettingsTab(glass: GlassState) {
             }
 
             item {
-                GroupedSection(header = "Library", footer = "Folio checks for new chapters in the background and lets you know.") {
+                GroupedSection(header = "Library", footer = "Once you finish a chapter of a title, Folio adds it to your library. It checks your library for new chapters in the background and lets you know.") {
+                    ToggleRow("Add titles you're reading", s.autoAddToLibrary, { v -> update { it.copy(autoAddToLibrary = v) } }, icon = Icons.Rounded.LibraryAdd, iconBackground = Teal)
+                    GroupedDivider(59.dp)
                     MenuRow(
                         "Check for new chapters", Icons.Rounded.Schedule, Green,
                         intervalLabel(s.updateIntervalHours), listOf(0, 6, 12, 24, 48), ::intervalLabel,
