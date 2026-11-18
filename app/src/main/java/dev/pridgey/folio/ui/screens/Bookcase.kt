@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,10 +59,13 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.ColorUtils
 import dev.pridgey.folio.data.LibraryItem
-import dev.pridgey.folio.ui.components.pressable
 import dev.pridgey.folio.ui.theme.Display
 import dev.pridgey.folio.ui.theme.Folio
 import dev.pridgey.folio.ui.theme.Heading
@@ -137,6 +141,8 @@ internal fun BookcaseShelf(
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     var touchX by remember { mutableStateOf<Float?>(null) }
+    val latestOpen by rememberUpdatedState(onOpen)
+    val latestLongClick by rememberUpdatedState(onLongClick)
 
     // Each book's centre along the row, in px, for working out how close the finger is.
     val centers = remember(row, density) {
@@ -182,17 +188,41 @@ internal fun BookcaseShelf(
             modifier = Modifier
                 .fillMaxWidth()
                 .pointerInput(row) {
+                    // One gesture handles the whole shelf: a tap opens the book under the finger, holding
+                    // still opens its options, and once the finger moves it's a scrub, which only browses.
+                    fun nearest(x: Float) = centers.indices.minByOrNull { abs(centers[it] - x) }?.let { row[it] }
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         touchX = down.position.x
+                        var moved = false
+                        var held = false
+                        var released = false
                         while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            val event = if (moved || held) {
+                                awaitPointerEvent(PointerEventPass.Final)
+                            } else {
+                                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { awaitPointerEvent(PointerEventPass.Final) }
+                            }
+                            if (event == null) {
+                                held = true
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                nearest(touchX ?: down.position.x)?.let { latestLongClick(it) }
+                                continue
+                            }
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
+                            if (!change.pressed) {
+                                released = true
+                                break
+                            }
                             // The list took the movement as a scroll: let the books settle back.
-                            if (change.isConsumed && change.positionChanged()) break
+                            if (change.isConsumed && change.positionChanged()) {
+                                moved = true
+                                break
+                            }
+                            if (abs(change.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
                             touchX = change.position.x
                         }
+                        if (released && !moved && !held) nearest(down.position.x)?.let { latestOpen(it) }
                         touchX = null
                     }
                 },
@@ -222,11 +252,16 @@ private fun Spine(item: LibraryItem, pullTarget: Float, onLongClick: () -> Unit,
         Modifier
             .zIndex(pull)
             .graphicsLayer { translationY = -9.dp.toPx() * pull }
-            .pressable(onClick = onClick, onLongClick = onLongClick, pressedScale = 1f),
+            // Touch is handled by the shelf; these keep each book usable with a screen reader.
+            .semantics(mergeDescendants = true) {
+                contentDescription = item.title
+                onClick { onClick(); true }
+                onLongClick { onLongClick(); true }
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // New chapters: a small dot above the book, out of the way of its lettering.
-        Box(Modifier.padding(bottom = 5.dp).size(5.dp).clip(CircleShape).background(if (item.unread > 0) c.accent else Color.Transparent))
+        // Chapters waiting in something you've started: a small dot above the book, clear of its lettering.
+        Box(Modifier.padding(bottom = 5.dp).size(5.dp).clip(CircleShape).background(if (item.unread > 0 && read > 0) c.accent else Color.Transparent))
         Box(
             Modifier
                 .width(width)
@@ -317,10 +352,11 @@ private fun SpineLabel(item: LibraryItem, modifier: Modifier) {
         Text(
             when {
                 item.total == 0 -> "Not checked yet"
+                item.unread == item.total -> "Not started · ${item.total} chapters"
                 item.unread == 0 -> "Up to date · ${item.total} chapters"
-                else -> "${item.unread} new · ${item.total} chapters"
+                else -> "${item.unread} unread · ${item.total} chapters"
             },
-            style = Folio.type.caption2, color = if (item.unread > 0) c.accent else c.secondaryLabel, maxLines = 1,
+            style = Folio.type.caption2, color = if (item.unread in 1 until item.total) c.accent else c.secondaryLabel, maxLines = 1,
         )
     }
 }
