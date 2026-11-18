@@ -263,6 +263,8 @@ internal fun BookcaseShelf(
                                 var moved = false
                                 var held = false
                                 var released = false
+                                // A second finger on the same book: the easter egg, not a tap.
+                                var twoFingers = false
                                 while (true) {
                                     val event = if (moved || held) {
                                         awaitPointerEvent(PointerEventPass.Final)
@@ -275,10 +277,11 @@ internal fun BookcaseShelf(
                                         nearest(touchX ?: down.position.x)?.let { latestLongClick(it) }
                                         continue
                                     }
+                                    if (event.changes.count { it.pressed } >= 2) twoFingers = true
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     if (!change.pressed) {
                                         released = true
-                                        break
+                                        if (event.changes.none { it.pressed }) break else continue
                                     }
                                     // The list took the movement as a scroll: let the books settle back.
                                     if (change.isConsumed && change.positionChanged()) {
@@ -288,7 +291,14 @@ internal fun BookcaseShelf(
                                     if (abs(change.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
                                     touchX = change.position.x
                                 }
-                                if (released && !moved && !held) nearest(down.position.x)?.let { latestOpen(it) }
+                                if (twoFingers && !moved && !held) {
+                                    nearest(down.position.x)?.let { item ->
+                                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                                        look.restyle(item)
+                                    }
+                                } else if (released && !moved && !held) {
+                                    nearest(down.position.x)?.let { latestOpen(it) }
+                                }
                                 touchX = null
                             }
                         },

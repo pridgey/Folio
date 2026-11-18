@@ -159,6 +159,25 @@ class ScreenshotTest {
         }
     }
 
+    /** The easter egg: a two-finger tap on a book moves it on to its next design; a plain tap doesn't. */
+    @Test fun twoFingerTapRestylesABook() {
+        Graph.settings.update { it.copy(bookcase = true, shelfStyle = dev.pridgey.folio.data.ShelfStyle.ASSORTED) }
+        shoot("bookcase_assorted_before", false) { HomeScreen(null) {} }
+        val before = Graph.spineVariants.variants.value
+        compose.onNodeWithTag("bookcase-shelf-0").performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.7f))
+            down(1, Offset(width * 0.1f + 6f, height * 0.75f))
+            up(1)
+            up(0)
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        val after = Graph.spineVariants.variants.value
+        // Exactly one book moved on by exactly one design.
+        org.junit.Assert.assertEquals(before.values.sum() + 1, after.values.sum())
+        compose.onRoot().captureRoboImage("screenshots/bookcase_assorted_after.png")
+    }
+
     @Test fun bookcaseDark() {
         Graph.settings.update { it.copy(bookcase = true) }
         shoot("bookcase_dark", true) { HomeScreen(null) {} }

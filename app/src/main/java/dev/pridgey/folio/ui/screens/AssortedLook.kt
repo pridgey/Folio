@@ -1,6 +1,11 @@
 package dev.pridgey.folio.ui.screens
 
 import android.os.Build
+import dev.pridgey.folio.data.LibraryItem
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -97,9 +102,12 @@ internal data class SpineRecipe(
     val side: Int,
 )
 
-/** Draws a book's recipe from [seed]: the same seed always gives the same book. */
-internal fun recipeFor(seed: Long): SpineRecipe {
-    val r = java.util.Random(seed * 0x9E3779B97F4A7C15uL.toLong() + 17)
+/**
+ * Draws a book's recipe from [seed]: the same seed always gives the same book. [variant] steps through
+ * further designs for the same title (the two-finger easter egg); 0 is the book's own.
+ */
+internal fun recipeFor(seed: Long, variant: Int = 0): SpineRecipe {
+    val r = java.util.Random(seed * 0x9E3779B97F4A7C15uL.toLong() + 17 + variant * 0x5DEECE66DL)
     fun weighted(vararg weights: Int): Int {
         var roll = r.nextInt(weights.sum())
         weights.forEachIndexed { i, w -> if (roll < w) return i else roll -= w }
@@ -197,15 +205,42 @@ internal object AssortedLook : GalleryLook() {
     /** Stamped in silver foil, when the book has the foil finish. */
     private fun TextStyle.foiled(on: Boolean) = if (on) copy(brush = silver) else this
 
+    override fun restyle(item: LibraryItem) = Graph.spineVariants.next(SpineArt.key(item.title))
+
     @Composable
     override fun Spine(b: Book, pull: Float, dark: Boolean) {
-        val recipe = remember(b.seed) { recipeFor(b.seed) }
+        val variants by Graph.spineVariants.variants.collectAsStateWithLifecycle()
+        val variant = variants[remember(b.item.title) { SpineArt.key(b.item.title) }] ?: 0
         val source = rememberSpineSource(b)
+        val recipe = remember(b.seed, variant, source?.scan) {
+            val drawn = recipeFor(b.seed, variant)
+            // A logo spine needs a logo: if the cover's been read and has no lettering up top, it gets an
+            // ordinary spine with a title instead of a blank one.
+            val noLogo = source?.scan?.let { SpineCrop.logo(it.boxes) == null } == true
+            if (drawn.frame == ArtFrame.SIDEWAYS && noLogo) drawn.copy(frame = ArtFrame.STANDARD) else drawn
+        }
         val accent = tone(b.cover, Color(0xFF8C2F2F), 0.5f..0.8f, 0.28f..0.42f)
-        SpineFrame(b, pull) {
-            Art(b, recipe, pull, source, blurred = false)
-            Finishing(b, recipe, pull)
-            Title(b, recipe, pull, source, accent)
+        // A new design arrives with the book turning round on the shelf, not on first sight.
+        val turn = remember { Animatable(0f) }
+        var shown by remember { mutableIntStateOf(variant) }
+        LaunchedEffect(variant) {
+            if (variant != shown) {
+                shown = variant
+                turn.snapTo(1f)
+                turn.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 260f))
+            }
+        }
+        Box(
+            Modifier.graphicsLayer {
+                rotationY = 180f * turn.value
+                cameraDistance = 16f * density
+            },
+        ) {
+            SpineFrame(b, pull) {
+                Art(b, recipe, pull, source, blurred = false)
+                Finishing(b, recipe, pull)
+                Title(b, recipe, pull, source, accent)
+            }
         }
     }
 

@@ -206,4 +206,14 @@ class FeatureLogicTest {
         assertEquals(0.2f, logo[3], 0.001f)
         assertNull(crop.logo(listOf(floatArrayOf(0.2f, 0.9f, 0.8f, 0.95f))))
     }
+
+    @Test fun spineVariantsStepThroughFreshDesignsInAFixedOrder() {
+        val seed = 123456789L
+        val walk = (0..8).map { dev.pridgey.folio.ui.screens.recipeFor(seed, it) }
+        // Same steps, same designs; and the first is the book's own.
+        assertEquals(walk, (0..8).map { dev.pridgey.folio.ui.screens.recipeFor(seed, it) })
+        assertEquals(dev.pridgey.folio.ui.screens.recipeFor(seed), walk[0])
+        // Each step is a different design.
+        assertEquals(walk.size, walk.distinct().size)
+    }
 }

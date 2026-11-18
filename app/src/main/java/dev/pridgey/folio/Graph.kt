@@ -54,6 +54,8 @@ object Graph {
         private set
     lateinit var coverText: dev.pridgey.folio.data.CoverText
         private set
+    lateinit var spineVariants: dev.pridgey.folio.data.SpineVariants
+        private set
 
     @OptIn(ExperimentalSerializationApi::class)
     fun init(app: Application) {
@@ -75,6 +77,7 @@ object Graph {
         downloads = Downloads(app, db, sources, library)
         spineArt = dev.pridgey.folio.data.SpineArt(app, sources.mangaDex, scope)
         coverText = dev.pridgey.folio.data.CoverText(app, scope)
+        spineVariants = dev.pridgey.folio.data.SpineVariants(app)
     }
 }
 

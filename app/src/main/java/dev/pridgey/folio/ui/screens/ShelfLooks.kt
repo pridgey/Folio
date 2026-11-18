@@ -115,6 +115,9 @@ internal abstract class ShelfLook {
 
     @Composable
     open fun dotColor(dark: Boolean): Color = Folio.colors.accent
+
+    /** The easter egg: move [item] on to its next design, for looks that have more than one. */
+    open fun restyle(item: LibraryItem) = Unit
 }
 
 internal fun lookFor(style: ShelfStyle): ShelfLook = when (style) {
