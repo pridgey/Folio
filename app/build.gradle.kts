@@ -25,6 +25,9 @@ android {
         versionName = ciVersionName
         // Where the app looks for its own updates.
         buildConfigField("String", "UPDATE_REPO", "\"${System.getenv("UPDATE_REPO") ?: "pridgey/Folio"}\"")
+        // Phones only: the bundled text recognition carries an 11 MB native library per CPU type, and
+        // the x86 ones only serve emulators.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -113,6 +116,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+    // On-device text recognition, bundled, to keep spine art clear of cover lettering.
+    implementation(libs.mlkit.text.japanese)
+    implementation(libs.mlkit.text.korean)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.room.runtime)

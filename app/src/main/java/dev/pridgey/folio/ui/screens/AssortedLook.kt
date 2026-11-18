@@ -18,6 +18,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import dev.pridgey.folio.data.CoverText
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
@@ -72,7 +77,7 @@ internal enum class ArtFrame { STANDARD, CLOSE_UP, TILTED, SIDEWAYS }
 internal enum class Finish { PLAIN, FOIL, VINTAGE }
 
 /** Where and how the title sits. */
-internal enum class TitleSpot { FOOT, HEAD, FROST, RIBBON, POSTER, OBI }
+internal enum class TitleSpot { FOOT, HEAD, FROST, RIBBON, POSTER }
 
 internal data class SpineRecipe(
     val frame: ArtFrame,
@@ -112,7 +117,7 @@ internal fun recipeFor(seed: Long): SpineRecipe {
     val tilt = (4f + r.nextFloat() * 4f) * if (r.nextBoolean()) 1f else -1f
     val finish = Finish.entries[weighted(70, 15, 15)]
     // A sideways cover keeps its logo clear: its title goes on frost at the foot.
-    val spot = if (frame == ArtFrame.SIDEWAYS) TitleSpot.FROST else TitleSpot.entries[weighted(30, 20, 20, 8, 12, 10)]
+    val spot = if (frame == ArtFrame.SIDEWAYS) TitleSpot.FROST else TitleSpot.entries[weighted(32, 22, 26, 8, 12)]
     val face = r.nextInt(TitleFaces.size)
     val up = r.nextInt(100) < 15
     // Edge-set titles are unusual on real spines, so only about one in ten.
@@ -151,18 +156,41 @@ internal val TitleFaces = listOf(
     TitleFace(Inter, FontWeight.Medium, upper = false, tracking = 0.01f, max = 10.5.sp),
 )
 
-/** One of the series' volume covers from MangaDex, picked steadily by [seed]; null until known or if none. */
+/** A picture a spine can be cut from, with the key its text scan is filed under. */
+internal class SpineSource(val model: Any, val key: String, val scan: CoverText.Scan?)
+
+/**
+ * Which cover a spine is cut from. Candidates are a few of the series' MangaDex volume covers, starting
+ * from one picked by [Book.seed], then the source's own cover. Each is read for text once; the first
+ * with clear art wins, or failing that the one with least lettering. Until the reads are in, the first
+ * candidate stands in.
+ */
 @Composable
-internal fun rememberSpineArt(title: String, seed: Long): String? {
-    val all by Graph.spineArt.covers.collectAsStateWithLifecycle()
-    val key = remember(title) { SpineArt.key(title) }
-    LaunchedEffect(key) { Graph.spineArt.request(title) }
-    val urls = all[key].orEmpty()
-    return if (urls.isEmpty()) null else urls[((seed ushr 5) % urls.size).toInt()]
+internal fun rememberSpineSource(b: Book): SpineSource? {
+    val item = b.item
+    val volumes by Graph.spineArt.covers.collectAsStateWithLifecycle()
+    val scans by Graph.coverText.scans.collectAsStateWithLifecycle()
+    val titleKey = remember(item.title) { SpineArt.key(item.title) }
+    LaunchedEffect(titleKey) { Graph.spineArt.request(item.title) }
+    val urls = volumes[titleKey].orEmpty()
+    val candidates = remember(urls, item.thumbnailUrl) {
+        val start = if (urls.isEmpty()) 0 else ((b.seed ushr 5) % urls.size).toInt()
+        val dex = (urls.drop(start) + urls.take(start)).take(4).map { CoverModel(MangaDexSource.ID, it) to "dex:$it" }
+        val own = item.thumbnailUrl?.let { listOf(CoverModel(item.sourceId, it) to "src:${item.sourceId}:$it") }.orEmpty()
+        dex + own
+    }
+    LaunchedEffect(candidates) { candidates.forEach { (model, key) -> Graph.coverText.request(key, model) } }
+    if (candidates.isEmpty()) return null
+    // How much text a typical spine-shaped window can't avoid on each candidate.
+    fun lettering(scan: CoverText.Scan) = SpineCrop.best(scan.boxes, 0.22f, 0.8f, 0.5f, 0.5f).text
+    val read = candidates.map { (_, key) -> scans[key] }
+    val chosen = candidates.indices.firstOrNull { i -> read[i]?.let { lettering(it) < 0.03f } == true }
+        ?: if (read.all { it != null }) candidates.indices.minBy { lettering(read[it]!!) } else 0
+    val (model, key) = candidates[chosen]
+    return SpineSource(model, key, read[chosen])
 }
 
 internal object AssortedLook : GalleryLook() {
-    private val obiPaper = Color(0xFFF5F1E8)
     private val rainbow = listOf(Color(0xFFFF7AD9), Color(0xFFFFE27A), Color(0xFF7AFFC4), Color(0xFF7AC8FF), Color(0xFFC27AFF), Color(0xFFFF7AD9))
     private val silver = Brush.linearGradient(listOf(Color(0xFFF4F6FA), Color(0xFFA9B0BB), Color(0xFFFFFFFF), Color(0xFF8E96A3)))
 
@@ -172,73 +200,83 @@ internal object AssortedLook : GalleryLook() {
     @Composable
     override fun Spine(b: Book, pull: Float, dark: Boolean) {
         val recipe = remember(b.seed) { recipeFor(b.seed) }
-        val art = rememberSpineArt(b.item.title, b.seed)
+        val source = rememberSpineSource(b)
         val accent = tone(b.cover, Color(0xFF8C2F2F), 0.5f..0.8f, 0.28f..0.42f)
         SpineFrame(b, pull) {
-            Art(b, recipe, pull, art, blurred = false)
+            Art(b, recipe, pull, source, blurred = false)
             Finishing(b, recipe, pull)
-            Title(b, recipe, pull, art, accent)
+            Title(b, recipe, pull, source, accent)
         }
     }
 
-    /** The art, framed by the recipe. [blurred] draws it again, softened, for frost. */
+    /**
+     * The art, framed by the recipe and moved, once the cover has been read, to the nearest stretch
+     * without lettering. [blurred] draws it again, softened, for frost.
+     */
     @Composable
-    private fun Art(b: Book, recipe: SpineRecipe, pull: Float, art: String?, blurred: Boolean) {
+    private fun Art(b: Book, recipe: SpineRecipe, pull: Float, source: SpineSource?, blurred: Boolean) {
         val filter = if (recipe.finish == Finish.VINTAGE) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.72f) }) else null
         val soft = if (blurred && Build.VERSION.SDK_INT >= 31) Modifier.blur(6.dp) else Modifier
-        when (recipe.frame) {
-            ArtFrame.SIDEWAYS -> Column(Modifier.fillMaxSize().then(soft)) {
+        if (recipe.frame == ArtFrame.SIDEWAYS) {
+            Column(Modifier.fillMaxSize().then(soft)) {
                 // The cover on its side: the band across its top, usually the logo, runs down the spine.
                 Box(Modifier.fillMaxWidth().weight(1f)) {
-                    Box(Modifier.fillMaxSize().downward()) { SpineImage(b, art, Alignment.TopCenter, filter) }
+                    Box(Modifier.fillMaxSize().downward()) { SpineImage(b, source, Alignment.TopCenter, filter) }
                 }
-                Box(Modifier.fillMaxWidth().height(b.height * 0.26f)) { SpineImage(b, art, Alignment.BottomCenter, filter) }
+                Box(Modifier.fillMaxWidth().height(b.height * 0.26f)) { SpineImage(b, source, Alignment.BottomCenter, filter) }
             }
-            else -> {
-                val aspect = b.height.value / b.width.value
-                Box(
-                    Modifier.fillMaxSize().then(soft).graphicsLayer {
-                        when (recipe.frame) {
-                            ArtFrame.CLOSE_UP -> {
-                                val s = recipe.zoom + 0.08f * pull
-                                scaleX = s
-                                scaleY = s
-                                transformOrigin = TransformOrigin(recipe.focusX, recipe.focusY)
-                            }
-                            ArtFrame.TILTED -> {
-                                // Just enough zoom that the turned art still covers the spine's corners.
-                                val t = recipe.tilt * PI.toFloat() / 180f
-                                val s = (abs(cos(t)) + aspect * abs(sin(t))) * 1.04f + 0.06f * pull
-                                rotationZ = recipe.tilt
-                                scaleX = s
-                                scaleY = s
-                                transformOrigin = TransformOrigin(0.5f, 0.55f)
-                            }
-                            else -> {
-                                // Standard: in a little from the top and foot, where covers carry their words.
-                                scaleX = 1.22f
-                                scaleY = 1.22f
-                                transformOrigin = TransformOrigin(0.5f, 0.56f)
-                            }
-                        }
-                    },
-                ) {
-                    SpineImage(b, art, Alignment.Center, filter)
-                }
-            }
+            return
+        }
+        val aspect = b.height.value / b.width.value
+        val tiltRad = recipe.tilt * PI.toFloat() / 180f
+        val zoom = when (recipe.frame) {
+            ArtFrame.CLOSE_UP -> recipe.zoom
+            // Just enough zoom that the turned art still covers the spine's corners.
+            ArtFrame.TILTED -> (abs(cos(tiltRad)) + aspect * abs(sin(tiltRad))) * 1.04f
+            else -> 1.22f
+        }
+        val (preferX, preferY) = when (recipe.frame) {
+            ArtFrame.CLOSE_UP -> recipe.focusX to recipe.focusY
+            ArtFrame.TILTED -> 0.5f to 0.55f
+            else -> 0.5f to 0.56f
+        }
+        // How much of the cover the spine sees: its full height, and a slice of its width.
+        val coverAspect = source?.scan?.aspect ?: 0.68f
+        val sliceW = ((b.width.value / b.height.value) / coverAspect).coerceAtMost(1f)
+        val window = remember(source?.scan, zoom, sliceW, preferX, preferY) {
+            val scan = source?.scan
+            if (scan == null) SpineCrop.Window(preferX, preferY, 0f)
+            else SpineCrop.best(scan.boxes, sliceW / zoom, 1f / zoom, preferX, preferY, travelW = sliceW)
+        }
+        // Across: slide the crop so the window's centre sits mid-spine. Down: zoom about the point that
+        // leaves the window's centre in view.
+        val bias = if (1f - sliceW > 0.001f) ((window.x - 0.5f) * 2f / (1f - sliceW)).coerceIn(-1f, 1f) else 0f
+        Box(
+            Modifier.fillMaxSize().then(soft).graphicsLayer {
+                val s = zoom + (if (recipe.frame == ArtFrame.TILTED) 0.06f else 0.08f) * pull
+                scaleX = s
+                scaleY = s
+                val originY = if (s > 1.001f) ((window.y - 1f / (2f * s)) / (1f - 1f / s)).coerceIn(0f, 1f) else 0.5f
+                transformOrigin = TransformOrigin(0.5f, originY)
+                if (recipe.frame == ArtFrame.TILTED) rotationZ = recipe.tilt
+            },
+        ) {
+            SpineImage(b, source, BiasAlignment(bias, 0f), filter)
         }
     }
 
-    /** The source's cover, with a MangaDex volume cover over it once one is found. */
+    /** The chosen cover, over the source's own while it loads. */
     @Composable
-    private fun SpineImage(b: Book, art: String?, alignment: Alignment, filter: ColorFilter?) {
+    private fun SpineImage(b: Book, source: SpineSource?, alignment: Alignment, filter: ColorFilter?) {
         Box(Modifier.fillMaxSize()) {
             CoverArt(b.item, Modifier.fillMaxSize(), alignment, filter)
-            if (art != null) {
+            val model = source?.model
+            if (model != null && !source.key.startsWith("src:")) {
                 val context = LocalContext.current
-                // Through the MangaDex source, which sends the headers its image server expects.
-                val request = remember(art) {
-                    ImageRequest.Builder(context).data(CoverModel(MangaDexSource.ID, art)).coverCacheKeys(MangaDexSource.ID, art).crossfade(true).build()
+                val url = (model as CoverModel).url
+                val request = remember(url) {
+                    // Through the MangaDex source, which sends the headers its image server expects.
+                    ImageRequest.Builder(context).data(model).coverCacheKeys(MangaDexSource.ID, url).crossfade(true).build()
                 }
                 AsyncImage(request, null, contentScale = ContentScale.Crop, alignment = alignment, colorFilter = filter, modifier = Modifier.fillMaxSize())
             }
@@ -277,7 +315,7 @@ internal object AssortedLook : GalleryLook() {
     }
 
     @Composable
-    private fun BoxScope.Title(b: Book, recipe: SpineRecipe, pull: Float, art: String?, accent: Color) {
+    private fun BoxScope.Title(b: Book, recipe: SpineRecipe, pull: Float, source: SpineSource?, accent: Color) {
         val face = TitleFaces[recipe.face]
         val said = remember(b.item.title) { spineText(b.item.title) }
         val text = if (said.initials) said.text else face.text(said.text)
@@ -294,7 +332,7 @@ internal object AssortedLook : GalleryLook() {
             Alignment.Bottom -> listOf(Alignment.BottomStart, Alignment.BottomCenter, Alignment.BottomEnd)
             else -> listOf(Alignment.CenterStart, Alignment.Center, Alignment.CenterEnd)
         }[recipe.side + 1]
-        // Frost and obi grow with the title, so long titles aren't squeezed into a sliver.
+        // Frost grows with the title, so long titles aren't squeezed into a sliver.
         val share = (0.24f + text.length * 0.0085f).coerceIn(if (said.initials) 0.22f else 0.28f, 0.5f)
 
         when (recipe.spot) {
@@ -310,7 +348,7 @@ internal object AssortedLook : GalleryLook() {
                     SpineTitle(text, onArt, Color.White, max, min = 6.5.sp, up = recipe.up)
                 }
             }
-            TitleSpot.FROST -> Frost(b, recipe, pull, art, b.height * share) {
+            TitleSpot.FROST -> Frost(b, recipe, pull, source, b.height * share) {
                 Box(Modifier.fillMaxSize().padding(horizontal = inset, vertical = 8.dp), contentAlignment = across(Alignment.CenterVertically)) {
                     SpineTitle(text, onArt, Color.White, max, min = 6.sp, up = recipe.up)
                 }
@@ -338,39 +376,41 @@ internal object AssortedLook : GalleryLook() {
                     )
                 }
             }
-            TitleSpot.OBI -> Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(b.height * (share + 0.06f))) {
-                Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.26f)))))
-                Box(
-                    Modifier.fillMaxWidth().weight(1f).background(obiPaper)
-                        .drawBehind { drawRect(Color.White, size = Size(size.width, 0.75.dp.toPx())) }
-                        .padding(horizontal = inset, vertical = 7.dp),
-                    contentAlignment = across(Alignment.CenterVertically),
-                ) {
-                    SpineTitle(text, face.style(), accent, max, min = 6.sp, up = recipe.up)
-                }
-            }
         }
     }
 
     /**
-     * The foot of the spine seen through frosted glass: the same art, softened and dimmed, so the
-     * title reads without a block of flat colour.
+     * The foot of the spine seen through frosted glass: the same art, softened and lightly dimmed. It
+     * fades in from the art above rather than starting at an edge, and a fine line of light marks where
+     * the glass settles.
      */
     @Composable
-    private fun BoxScope.Frost(b: Book, recipe: SpineRecipe, pull: Float, art: String?, height: Dp, content: @Composable BoxScope.() -> Unit) {
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(height).clipToBounds()) {
-            // The whole spine's art again, blurred, lined up with the art above.
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().requiredHeight(b.height)) {
-                Art(b, recipe, pull, art, blurred = true)
-            }
+    private fun BoxScope.Frost(b: Book, recipe: SpineRecipe, pull: Float, source: SpineSource?, height: Dp, content: @Composable BoxScope.() -> Unit) {
+        val fade = 18.dp
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(height + fade)) {
             Box(
-                Modifier.matchParentSize().drawBehind {
-                    drawRect(Color.Black.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.2f else 0.45f))
-                    // Light catching the glass's top edge, fading off rather than ruling a line.
-                    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = 10.dp.toPx()))
-                },
+                Modifier
+                    .matchParentSize()
+                    .clipToBounds()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        // Fade the frost in over the first stretch, so it grows out of the art.
+                        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), endY = fade.toPx()), blendMode = BlendMode.DstIn)
+                    },
+            ) {
+                // The whole spine's art again, blurred, lined up with the art above.
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().requiredHeight(b.height)) {
+                    Art(b, recipe, pull, source, blurred = true)
+                }
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.2f else 0.45f)))
+            }
+            // Where the glass settles: a fine line of light, softening off to either side.
+            Box(
+                Modifier.fillMaxWidth().padding(top = fade).height(0.75.dp)
+                    .background(Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.08f)))),
             )
-            content()
+            Box(Modifier.fillMaxSize().padding(top = fade)) { content() }
         }
     }
 }

@@ -173,4 +173,24 @@ class FeatureLogicTest {
         assertTrue(w(475) - w(40) >= 6f)
         assertEquals(w(1500), w(5000), 0.001f)
     }
+
+    @Test fun spineCropsSteerAroundLettering() {
+        val crop = dev.pridgey.folio.ui.screens.SpineCrop
+        // A logo across the top fifth and credits across the bottom tenth.
+        val boxes = listOf(floatArrayOf(0.05f, 0.03f, 0.95f, 0.2f), floatArrayOf(0.1f, 0.9f, 0.9f, 0.97f))
+        // A window that can't fit between them keeps as little as it can; one that can, keeps none.
+        val tall = crop.best(boxes, 0.25f, 0.95f, 0.5f, 0.5f)
+        val short = crop.best(boxes, 0.25f, 0.6f, 0.5f, 0.2f)
+        assertTrue(tall.text > 0f)
+        assertEquals(0f, short.text, 0.0001f)
+        assertTrue(short.y - 0.3f > 0.2f - 0.0001f) // pushed down below the logo
+        // With no lettering, it stays where the recipe wanted.
+        val free = crop.best(emptyList(), 0.25f, 0.6f, 0.4f, 0.45f)
+        assertEquals(0.4f, free.x, 0.03f)
+        assertEquals(0.45f, free.y, 0.03f)
+        // A vertical title down the left: the window moves right to miss it.
+        val side = crop.best(listOf(floatArrayOf(0.02f, 0.1f, 0.2f, 0.9f)), 0.25f, 0.8f, 0.2f, 0.5f)
+        assertEquals(0f, side.text, 0.0001f)
+        assertTrue(side.x - 0.125f >= 0.2f)
+    }
 }
