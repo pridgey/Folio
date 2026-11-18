@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ViewWeek
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -170,6 +173,9 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
     var newShelf by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<dev.pridgey.folio.data.ShelfEntity?>(null) }
     if (refreshing && sync == null) refreshing = false
+    // Shelves span the screen inside the grid's 16dp margins, less the first book's inset.
+    val density = LocalDensity.current
+    val bookcaseWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value } - 32f - 4f
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
@@ -278,9 +284,18 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                             Text(Format.plural(list.size, "title"), style = Folio.type.footnote, color = c.secondaryLabel)
                         }
                     }
-                    items(list, key = { it.id }) { item ->
-                        LibraryTile(item, Modifier.animateItem(), onLongClick = { organizing = item }) {
-                            nav.details(item.id, item.sourceId, item.thumbnailUrl, "lib-${item.id}")
+                    if (settings.bookcase) {
+                        val rows = Spines.rows(list, available = bookcaseWidth)
+                        items(rows, key = { "shelf-row-${it.first().id}" }, span = { GridItemSpan(maxLineSpan) }) { row ->
+                            BookcaseShelf(row, Modifier.animateItem(), onLongClick = { organizing = it }) { item ->
+                                nav.details(item.id, item.sourceId, item.thumbnailUrl)
+                            }
+                        }
+                    } else {
+                        items(list, key = { it.id }) { item ->
+                            LibraryTile(item, Modifier.animateItem(), onLongClick = { organizing = item }) {
+                                nav.details(item.id, item.sourceId, item.thumbnailUrl, "lib-${item.id}")
+                            }
                         }
                     }
                     if (list.isEmpty()) {
@@ -309,6 +324,20 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                         )
                     }
                     HorizontalDivider(color = c.separator)
+                    Text("View", style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                    listOf(false to "Covers", true to "Bookcase").forEach { (shelf, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label, style = Folio.type.body) },
+                            leadingIcon = { Icon(if (shelf) Icons.Rounded.ViewWeek else Icons.Rounded.GridView, null) },
+                            trailingIcon = { if (shelf == settings.bookcase) Icon(Icons.Rounded.Check, null, tint = c.accent) },
+                            onClick = {
+                                Graph.settings.update { it.copy(bookcase = shelf) }
+                                sortMenu = false
+                            },
+                        )
+                    }
+                    if (!settings.bookcase) {
+                    HorizontalDivider(color = c.separator)
                     Text("Grid", style = Folio.type.footnote, color = c.secondaryLabel, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                     listOf(2, 3, 4).forEach { n ->
                         DropdownMenuItem(
@@ -320,6 +349,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                                 sortMenu = false
                             },
                         )
+                    }
                     }
                 }
             }

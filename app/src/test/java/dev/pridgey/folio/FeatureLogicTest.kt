@@ -117,4 +117,16 @@ class FeatureLogicTest {
         val old = SourceLog.Snapshot(days = mapOf(1L to listOf(SourceLog.Day(today - 30, failed = 10))))
         assertNull(old.uptime(1L))
     }
+
+    @Test fun bookcaseFillsShelvesWithoutOverflowing() {
+        fun book(id: Long, chapters: Int) = dev.pridgey.folio.data.LibraryItem(id, 1, "T$id", null, 0, chapters, 0, 0, 0, 0, null)
+        val books = (1L..40L).map { book(it, (it * 17 % 400).toInt()) }
+        val rows = dev.pridgey.folio.ui.screens.Spines.rows(books, available = 340f)
+        assertEquals(books, rows.flatten())
+        rows.forEach { row ->
+            val used = row.sumOf { dev.pridgey.folio.ui.screens.Spines.width(it.total).toDouble() } + (row.size - 1) * dev.pridgey.folio.ui.screens.Spines.GAP
+            assertTrue(used <= 340.0)
+        }
+        assertTrue(dev.pridgey.folio.ui.screens.Spines.width(0) < dev.pridgey.folio.ui.screens.Spines.width(300))
+    }
 }

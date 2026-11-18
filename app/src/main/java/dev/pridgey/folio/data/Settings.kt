@@ -76,6 +76,8 @@ class Settings(context: Context) {
         val deleteAfterRead: Boolean = false,
         val librarySort: LibrarySort = LibrarySort.LAST_READ,
         val libraryColumns: Int = 3,
+        /** Library as spines on a bookcase instead of a cover grid. */
+        val bookcase: Boolean = false,
         val onboarded: Boolean = false,
         val lastUpdatesSeen: Long = 0,
     )
@@ -128,6 +130,7 @@ class Settings(context: Context) {
             deleteAfterRead = getBoolean("deleteAfterRead", d.deleteAfterRead),
             librarySort = enum("librarySort", d.librarySort),
             libraryColumns = getInt("libraryColumns", d.libraryColumns),
+            bookcase = getBoolean("bookcase", d.bookcase),
             onboarded = getBoolean("onboarded", d.onboarded),
             lastUpdatesSeen = getLong("lastUpdatesSeen", d.lastUpdatesSeen),
         )
@@ -165,6 +168,7 @@ class Settings(context: Context) {
         .putBoolean("deleteAfterRead", v.deleteAfterRead)
         .putString("librarySort", v.librarySort.name)
         .putInt("libraryColumns", v.libraryColumns)
+        .putBoolean("bookcase", v.bookcase)
         .putBoolean("onboarded", v.onboarded)
         .putLong("lastUpdatesSeen", v.lastUpdatesSeen)
         .apply()
