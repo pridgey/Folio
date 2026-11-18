@@ -9,6 +9,7 @@ import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -128,7 +128,7 @@ fun LockGate(content: @Composable () -> Unit) {
 @Composable
 private fun LockScreen() {
     val c = Folio.colors
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val prompt = {
         activity?.let { a -> AppLock.authenticate(a, "Unlock Folio") { ok -> if (ok) AppLock.unlock() } }
     }
