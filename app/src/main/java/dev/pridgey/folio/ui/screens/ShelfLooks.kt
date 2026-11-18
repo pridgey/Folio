@@ -119,16 +119,16 @@ internal abstract class ShelfLook {
 
 internal fun lookFor(style: ShelfStyle): ShelfLook = when (style) {
     ShelfStyle.GALLERY -> GalleryLook()
-    ShelfStyle.SPOTLIGHT -> SpotlightLook
-    ShelfStyle.WHITE_CUBE -> WhiteCubeLook
-    ShelfStyle.SALON -> SalonLook
-    ShelfStyle.MOONLIGHT -> MoonlightLook
-    ShelfStyle.VITRINE -> VitrineLook
-    ShelfStyle.CONCRETE -> ConcreteLook
-    ShelfStyle.MONOCHROME -> MonochromeLook
-    ShelfStyle.CANDLELIGHT -> CandlelightLook
-    ShelfStyle.MOUNTED -> MountedLook
-    ShelfStyle.HALO -> HaloLook
+    ShelfStyle.OBI -> ObiLook
+    ShelfStyle.CLOSE_UP -> CloseUpLook
+    ShelfStyle.TINTED -> TintedLook
+    ShelfStyle.GLOSS -> GlossLook
+    ShelfStyle.CLOTH -> ClothLook
+    ShelfStyle.POSTER -> PosterLook
+    ShelfStyle.LOGO -> LogoLook
+    ShelfStyle.NUMBERED -> NumberedLook
+    ShelfStyle.VINTAGE -> VintageLook
+    ShelfStyle.FOIL -> FoilLook
 }
 
 // ------------------------------------------------------------------ Shared drawing

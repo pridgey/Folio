@@ -34,17 +34,17 @@ enum class DownloadPace(val label: String, val gapMs: Long) { FAST("Fast", 0), B
 
 /** How the bookcase is drawn. */
 enum class ShelfStyle(val label: String, val blurb: String) {
-    GALLERY("Gallery", "Cover art under warm spotlights on a dark wall"),
-    SPOTLIGHT("Spotlight", "A dark room; one light follows your finger"),
-    WHITE_CUBE("White Cube", "A bright gallery, a floating shelf, wall labels"),
-    SALON("Salon", "Oxblood walls and brass picture lights"),
-    MOONLIGHT("Moonlight", "After hours, moonlight through the windows"),
-    VITRINE("Vitrine", "Under glass in a lit display case"),
-    CONCRETE("Concrete", "Raw concrete, track lights and a steel ledge"),
-    MONOCHROME("Monochrome", "Black and white until you start a title"),
-    CANDLELIGHT("Candlelight", "A warm glow that flickers from below"),
-    MOUNTED("Mounted", "Hung on the wall like framed art, no shelf"),
-    HALO("Halo", "Each book backlit in its own colour"),
+    GALLERY("Gallery", "A slice of the cover, titled at the foot"),
+    OBI("Obi", "Wrapped in a paper band, like a new volume"),
+    CLOSE_UP("Close-up", "Zoomed in on the cover's faces, titled from the head"),
+    TINTED("Tinted", "The art in two tones of the cover's colour"),
+    GLOSS("Gloss", "Laminated, with light running across it"),
+    CLOTH("Cloth", "Clothbound, the art faint in the weave, title pressed in"),
+    POSTER("Poster", "Big condensed type down the whole spine"),
+    LOGO("Logo", "The cover turned so its own logo runs down the spine"),
+    NUMBERED("Numbered", "A volume plate with how far you've read"),
+    VINTAGE("Vintage", "Faded, well-loved copies, creased as you read"),
+    FOIL("Foil", "A holographic sheen and a silver title"),
 }
 
 enum class LibrarySort(val label: String) { LAST_READ("Recently read"), LAST_UPDATED("New chapters"), UNREAD("Unread"), TITLE("Title"), DATE_ADDED("Date added") }
