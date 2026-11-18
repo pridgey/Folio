@@ -1,5 +1,10 @@
 package dev.pridgey.folio.ui.screens
 
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.Crop
+import androidx.compose.material.icons.rounded.Vibration
+import dev.pridgey.folio.data.PageEffect
+
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -154,6 +159,14 @@ fun SettingsTab(glass: GlassState) {
                     ToggleRow("Volume buttons turn pages", s.volumeKeys, { v -> update { it.copy(volumeKeys = v) } }, icon = Icons.Rounded.VolumeUp, iconBackground = Purple)
                     GroupedDivider(59.dp)
                     ToggleRow("Keep the screen on", s.keepScreenOn, { v -> update { it.copy(keepScreenOn = v) } }, icon = Icons.Rounded.LightMode, iconBackground = Orange)
+                    GroupedDivider(59.dp)
+                    MenuRow("Page turn", Icons.Rounded.AutoStories, Purple, s.pageEffect.label, PageEffect.entries, { it.label }) { e -> update { it.copy(pageEffect = e) } }
+                    GroupedDivider(59.dp)
+                    ToggleRow("Buzz at the end of a chapter", s.chapterHaptics, { v -> update { it.copy(chapterHaptics = v) } }, icon = Icons.Rounded.Vibration, iconBackground = Red)
+                    GroupedDivider(59.dp)
+                    ToggleRow("Two pages on wide screens", s.spreads, { v -> update { it.copy(spreads = v) } }, icon = Icons.Rounded.MenuBook, iconBackground = Blue)
+                    GroupedDivider(59.dp)
+                    ToggleRow("Trim page margins", s.autoCrop, { v -> update { it.copy(autoCrop = v) } }, icon = Icons.Rounded.Crop, iconBackground = Green)
                 }
             }
 

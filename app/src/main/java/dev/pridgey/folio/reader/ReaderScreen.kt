@@ -98,9 +98,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
+import coil3.request.transformations
 import dev.pridgey.folio.Graph
 import dev.pridgey.folio.data.ChapterNumbers
+import dev.pridgey.folio.data.PageEffect
 import dev.pridgey.folio.data.PageScale
+import dev.pridgey.folio.data.Settings
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.platform.LocalConfiguration
+import kotlinx.coroutines.delay
+import me.saket.telephoto.zoomable.ZoomableContentLocation
+import me.saket.telephoto.zoomable.zoomable
 import dev.pridgey.folio.data.ReaderBackground
 import dev.pridgey.folio.data.ReaderMode
 import dev.pridgey.folio.source.MangaDexSource
@@ -156,6 +170,7 @@ private fun ReaderBody(
     val toggleChrome = { chrome = !chrome }
 
     Box(Modifier.fillMaxSize().background(background)) {
+      androidx.compose.runtime.CompositionLocalProvider(LocalReaderBackground provides background) {
         val items = state.items
         if (items.isEmpty()) {
             CircularProgressIndicator(Modifier.align(Alignment.Center).size(28.dp), color = Color.White.copy(alpha = 0.6f), strokeWidth = 2.5.dp)
@@ -165,14 +180,15 @@ private fun ReaderBody(
                 if (state.mode == ReaderMode.WEBTOON) {
                     WebtoonReader(vm, items, state.startIndex, settings.webtoonGap, settings.tapZones, pageKeys, toggleChrome, chrome)
                 } else {
-                    PagedReader(vm, items, state.startIndex, state.mode, settings.pageScale, settings.tapZones, pageKeys, toggleChrome)
+                    PagedReader(vm, items, state.startIndex, state.mode, settings, pageKeys, toggleChrome)
                 }
             }
         }
 
-        // Night filter: dims and warms the page.
-        if (settings.nightFilter > 0f) {
-            Box(Modifier.fillMaxSize().background(Color(0xFF1A0E00).copy(alpha = settings.nightFilter)))
+        // Night filter: dims and warms the page, around the clock or on its schedule.
+        val night by animateFloatAsState(rememberNightStrength(settings), tween(1200), label = "night")
+        if (night > 0f) {
+            Box(Modifier.fillMaxSize().background(Color(0xFF1A0E00).copy(alpha = night)))
         }
 
         // A quiet page counter while the controls are hidden.
@@ -199,6 +215,7 @@ private fun ReaderBody(
             },
         )
         ChallengeSheet()
+      }
     }
 
     if (sheet) ReaderSettingsSheet(vm, state, onDismiss = { sheet = false })
@@ -217,68 +234,134 @@ private fun ReaderBody(
 
 // ------------------------------------------------------------------ Paged
 
+/** The night filter's strength right now: its setting, or nothing outside its scheduled hours. */
+@Composable
+private fun rememberNightStrength(settings: Settings.Values): Float {
+    if (!settings.nightSchedule) return settings.nightFilter
+    var active by remember { mutableStateOf(NightSchedule.active(settings.nightFrom, settings.nightTo)) }
+    LaunchedEffect(settings.nightFrom, settings.nightTo) {
+        while (true) {
+            active = NightSchedule.active(settings.nightFrom, settings.nightTo)
+            delay(30_000)
+        }
+    }
+    return if (active) settings.nightFilter else 0f
+}
+
+/** A gentle tap under the finger when a chapter ends. */
+@Composable
+private fun rememberChapterEndHaptic(enabled: Boolean): (ReaderItem?) -> Unit {
+    val haptics = LocalHapticFeedback.current
+    val on by rememberUpdatedState(enabled)
+    return remember { { item -> if (on && item is ReaderItem.Transition && item.forward) haptics.performHapticFeedback(HapticFeedbackType.Confirm) } }
+}
+
+// ------------------------------------------------------------------ Paged
+
 @Composable
 private fun PagedReader(
     vm: ReaderViewModel,
     items: List<ReaderItem>,
     start: Int,
     mode: ReaderMode,
-    scale: PageScale,
-    tapZones: Boolean,
+    settings: Settings.Values,
     pageKeys: Flow<Int>,
     toggleChrome: () -> Unit,
 ) {
+    val config = LocalConfiguration.current
+    // Side-by-side pages on wide windows, for left-to-right and right-to-left reading.
+    val spreads = settings.spreads && mode != ReaderMode.VERTICAL && config.screenWidthDp >= 600 && config.screenWidthDp > config.screenHeightDp
+    // Pages found to be wide once loaded; they take a whole screen.
+    val wide = remember { mutableStateMapOf<String, Boolean>() }
+    val slots = remember(items, spreads, wide.size) {
+        if (spreads) spreadsOf(items, wide.keys) else items.indices.map { listOf(it) }
+    }
+
     // The pager reads its count and keys in derived state outside composition. Every lambda reads this
     // one state, so they always see the same list, even in the frame where the next chapter is appended.
     val latest = rememberUpdatedState(items)
-    val pager = rememberPagerState(initialPage = start.coerceIn(0, (items.size - 1).coerceAtLeast(0))) { latest.value.size }
+    val latestSlots = rememberUpdatedState(slots)
+    val startSlot = slots.indexOfFirst { start in it }.coerceAtLeast(0)
+    val pager = rememberPagerState(initialPage = startSlot.coerceIn(0, (slots.size - 1).coerceAtLeast(0))) { latestSlots.value.size }
     val scope = rememberCoroutineScope()
     val rtl = mode == ReaderMode.RIGHT_TO_LEFT
+    val chapterEnd = rememberChapterEndHaptic(settings.chapterHaptics)
+    val crop = if (settings.autoCrop) CropBorders(sidesOnly = false) else null
 
     LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { vm.onPosition(it) }
+        snapshotFlow { latestSlots.value.getOrNull(pager.settledPage) }.distinctUntilChanged().collect { slot ->
+            slot ?: return@collect
+            // Report every page shown, so progress lands on the later one of a spread.
+            slot.forEach { vm.onPosition(it) }
+            chapterEnd(latest.value.getOrNull(slot.first()))
+        }
     }
+    val last = { (latestSlots.value.size - 1).coerceAtLeast(0) }
     LaunchedEffect(pager) {
-        pageKeys.collect { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, latest.value.size - 1)) } }
+        pageKeys.collect { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, last())) } }
     }
 
-    val turn: (Int) -> Unit = { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, latest.value.size - 1)) } }
+    val turn: (Int) -> Unit = { d -> scope.launch { pager.animateScrollToPage((pager.currentPage + d).coerceIn(0, last())) } }
     val onTap: (Offset, Float, Float) -> Unit = { offset, width, height ->
         val third = if (mode == ReaderMode.VERTICAL) offset.y / height else offset.x / width
         when {
-            !tapZones || third in 0.33f..0.67f -> toggleChrome()
+            !settings.tapZones || third in 0.33f..0.67f -> toggleChrome()
             third < 0.33f -> turn(if (rtl) 1 else -1)
             else -> turn(if (rtl) -1 else 1)
         }
     }
+    val onWide: (String) -> Unit = { key -> if (spreads && wide[key] == null) wide[key] = true }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
+        val vertical = mode == ReaderMode.VERTICAL
         val page: @Composable (Int) -> Unit = { i ->
-            latest.value.getOrNull(i)?.let { ReaderPage(vm, it, scale, onTap = { o -> onTap(o, w, h) }, isFirst = i == start) }
+            val slot = latestSlots.value.getOrNull(i)
+            val all = latest.value
+            Box(Modifier.fillMaxSize().pageEffect(pager, i, settings.pageEffect, vertical, rtl).background(LocalReaderBackground.current)) {
+                when {
+                    slot == null -> Unit
+                    slot.size == 2 -> {
+                        val a = all.getOrNull(slot[0]) as? ReaderItem.Page
+                        val b = all.getOrNull(slot[1]) as? ReaderItem.Page
+                        if (a != null && b != null) SpreadPage(a, b, rtl, crop, onWide, onTap = { o -> onTap(o, w, h) })
+                    }
+                    else -> all.getOrNull(slot[0])?.let {
+                        ReaderPage(vm, it, settings.pageScale, crop, onWide, onTap = { o -> onTap(o, w, h) }, isFirst = slot[0] == start)
+                    }
+                }
+            }
         }
-        if (mode == ReaderMode.VERTICAL) {
-            VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = { latest.value.getOrNull(it)?.key ?: it }) { page(it) }
+        val key = { i: Int -> latestSlots.value.getOrNull(i)?.firstOrNull()?.let { latest.value.getOrNull(it)?.key } ?: i }
+        if (vertical) {
+            VerticalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, key = key) { page(it) }
         } else {
-            HorizontalPager(pager, Modifier.fillMaxSize(), reverseLayout = rtl, beyondViewportPageCount = 1, key = { latest.value.getOrNull(it)?.key ?: it }) { page(it) }
+            HorizontalPager(pager, Modifier.fillMaxSize(), reverseLayout = rtl, beyondViewportPageCount = 1, key = key) { page(it) }
         }
     }
 }
 
+/** The reader's page colour, so page effects can give each page an opaque face. */
+private val LocalReaderBackground = androidx.compose.runtime.staticCompositionLocalOf { Color.Black }
+
 @Composable
-private fun ReaderPage(vm: ReaderViewModel, item: ReaderItem, scale: PageScale, onTap: (Offset) -> Unit, isFirst: Boolean) {
+private fun ReaderPage(vm: ReaderViewModel, item: ReaderItem, scale: PageScale, crop: CropBorders?, onWide: (String) -> Unit, onTap: (Offset) -> Unit, isFirst: Boolean) {
     val context = LocalContext.current
     when (item) {
         is ReaderItem.Page -> {
             val zoom = rememberZoomableImageState(rememberZoomableState())
             var failed by remember(item.key) { mutableStateOf(false) }
             var attempt by remember(item.key) { mutableStateOf(0) }
-            val request = remember(item.key, attempt) {
+            val request = remember(item.key, attempt, crop) {
                 ImageRequest.Builder(context).data(item.model)
+                    .apply { if (crop != null) transformations(crop) }
                     .listener(
                         onError = { _, _ -> failed = true },
-                        onSuccess = { _, r -> if (isFirst) vm.reportAspect(r.image.height / r.image.width.coerceAtLeast(1).toFloat()) },
+                        onSuccess = { _, r ->
+                            if (isFirst) vm.reportAspect(r.image.height / r.image.width.coerceAtLeast(1).toFloat())
+                            if (r.image.width > r.image.height) onWide(item.key)
+                        },
                     )
                     .build()
             }
@@ -303,6 +386,39 @@ private fun ReaderPage(vm: ReaderViewModel, item: ReaderItem, scale: PageScale, 
         is ReaderItem.Failed -> ChapterError(vm, item)
         is ReaderItem.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PageSpinner(null) }
     }
+}
+
+/** Two pages meeting at the spine, zoomed and panned together. In manga order the first page is on the right. */
+@Composable
+private fun SpreadPage(first: ReaderItem.Page, second: ReaderItem.Page, rtl: Boolean, crop: CropBorders?, onWide: (String) -> Unit, onTap: (Offset) -> Unit) {
+    val zoom = rememberZoomableState()
+    LaunchedEffect(zoom) { zoom.setContentLocation(ZoomableContentLocation.SameAsLayoutBounds) }
+    val (left, right) = if (rtl) second to first else first to second
+    Row(Modifier.fillMaxSize().zoomable(zoom, onClick = onTap)) {
+        SpreadHalf(left, Alignment.CenterEnd, crop, onWide, Modifier.weight(1f))
+        SpreadHalf(right, Alignment.CenterStart, crop, onWide, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SpreadHalf(item: ReaderItem.Page, alignment: Alignment, crop: CropBorders?, onWide: (String) -> Unit, modifier: Modifier) {
+    val context = LocalContext.current
+    var attempt by remember(item.key) { mutableStateOf(0) }
+    val request = remember(item.key, attempt, crop) {
+        ImageRequest.Builder(context).data(item.model)
+            .apply { if (crop != null) transformations(crop) }
+            .listener(onSuccess = { _, r -> if (r.image.width > r.image.height) onWide(item.key) })
+            .build()
+    }
+    SubcomposeAsyncImage(
+        model = request,
+        contentDescription = "Page ${item.index + 1}",
+        contentScale = ContentScale.Fit,
+        alignment = alignment,
+        modifier = modifier.fillMaxHeight(),
+        loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PageSpinner(item.index + 1) } },
+        error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { PageError { attempt++ } } },
+    )
 }
 
 @Composable
@@ -346,9 +462,17 @@ private fun WebtoonReader(
     val zoom = remember { Animatable(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
 
+    val settings by Graph.settings.values.collectAsStateWithLifecycle()
+    val chapterEnd = rememberChapterEndHaptic(settings.chapterHaptics)
+    val latest = rememberUpdatedState(items)
     LaunchedEffect(list) {
-        snapshotFlow { list.firstVisibleItemIndex }.distinctUntilChanged().collect { vm.onPosition(it) }
+        snapshotFlow { list.firstVisibleItemIndex }.distinctUntilChanged().collect {
+            vm.onPosition(it)
+            chapterEnd(latest.value.getOrNull(it))
+        }
     }
+    // Only the sides: trimming the top and bottom would close the gaps between a strip's panels.
+    val crop = if (settings.autoCrop) CropBorders(sidesOnly = true) else null
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = constraints.maxHeight.toFloat()
@@ -411,7 +535,7 @@ private fun WebtoonReader(
         ) {
             itemsIndexed(items, key = { _, it -> it.key }) { i, item ->
                 when (item) {
-                    is ReaderItem.Page -> WebtoonPage(vm, item, gap, isFirst = i == start)
+                    is ReaderItem.Page -> WebtoonPage(vm, item, gap, crop, isFirst = i == start)
                     is ReaderItem.Transition -> TransitionCard(vm, item, Modifier.heightIn(min = 420.dp))
                     is ReaderItem.Failed -> ChapterError(vm, item, Modifier.heightIn(min = 420.dp))
                     is ReaderItem.Loading -> Box(Modifier.fillMaxWidth().height(480.dp), contentAlignment = Alignment.Center) { PageSpinner(null) }
@@ -422,11 +546,12 @@ private fun WebtoonReader(
 }
 
 @Composable
-private fun WebtoonPage(vm: ReaderViewModel, item: ReaderItem.Page, gap: Boolean, isFirst: Boolean) {
+private fun WebtoonPage(vm: ReaderViewModel, item: ReaderItem.Page, gap: Boolean, crop: CropBorders?, isFirst: Boolean) {
     val context = LocalContext.current
     var attempt by remember(item.key) { mutableStateOf(0) }
-    val request = remember(item.key, attempt) {
+    val request = remember(item.key, attempt, crop) {
         ImageRequest.Builder(context).data(item.model)
+            .apply { if (crop != null) transformations(crop) }
             .listener(onSuccess = { _, r -> if (isFirst) vm.reportAspect(r.image.height / r.image.width.coerceAtLeast(1).toFloat()) })
             .build()
     }
@@ -619,18 +744,19 @@ private fun ReaderSettingsSheet(vm: ReaderViewModel, state: ReaderViewModel.Stat
                 Label("Background")
                 SegmentedControl(ReaderBackground.entries.filter { it != ReaderBackground.AUTO }, s.readerBackground, { it.label }, { v -> Graph.settings.update { it.copy(readerBackground = v) } }, Modifier.fillMaxWidth())
             }
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.DarkMode, null, tint = c.secondaryLabel, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Label("Night filter", Modifier.weight(1f))
+            if (state.mode.paged) {
+                Column {
+                    Label("Page turn")
+                    SegmentedControl(PageEffect.entries, s.pageEffect, { it.label }, { v -> Graph.settings.update { it.copy(pageEffect = v) } }, Modifier.fillMaxWidth())
                 }
-                Slider(
-                    value = s.nightFilter, onValueChange = { v -> Graph.settings.update { it.copy(nightFilter = v) } }, valueRange = 0f..0.7f,
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = c.warning, inactiveTrackColor = c.fill),
-                )
             }
+            NightFilterControls(s)
             Column(Modifier.clip(RoundedCornerShape(14.dp)).background(c.surface)) {
+                SheetToggle("Trim page margins", s.autoCrop) { v -> Graph.settings.update { it.copy(autoCrop = v) } }
+                if (state.mode == ReaderMode.RIGHT_TO_LEFT || state.mode == ReaderMode.LEFT_TO_RIGHT) {
+                    SheetToggle("Two pages on wide screens", s.spreads) { v -> Graph.settings.update { it.copy(spreads = v) } }
+                }
+                SheetToggle("Buzz at the end of a chapter", s.chapterHaptics) { v -> Graph.settings.update { it.copy(chapterHaptics = v) } }
                 SheetToggle("Tap the sides to turn pages", s.tapZones) { v -> Graph.settings.update { it.copy(tapZones = v) } }
                 SheetToggle("Volume buttons turn pages", s.volumeKeys) { v -> Graph.settings.update { it.copy(volumeKeys = v) } }
                 SheetToggle("Show page number", s.showPageNumber) { v -> Graph.settings.update { it.copy(showPageNumber = v) } }
@@ -639,6 +765,74 @@ private fun ReaderSettingsSheet(vm: ReaderViewModel, state: ReaderViewModel.Stat
             }
         }
     }
+}
+
+@Composable
+private fun NightFilterControls(s: Settings.Values) {
+    val c = Folio.colors
+    var picking by remember { mutableStateOf<Boolean?>(null) } // true: start time, false: end time
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.DarkMode, null, tint = c.secondaryLabel, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Label("Night filter", Modifier.weight(1f))
+        }
+        Slider(
+            value = s.nightFilter, onValueChange = { v -> Graph.settings.update { it.copy(nightFilter = v) } }, valueRange = 0f..0.7f,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = c.warning, inactiveTrackColor = c.fill),
+        )
+        Column(Modifier.clip(RoundedCornerShape(14.dp)).background(c.surface)) {
+            SheetToggle("On a schedule", s.nightSchedule) { v ->
+                // Turning the schedule on with the filter at zero would do nothing, so give it a starting strength.
+                Graph.settings.update { it.copy(nightSchedule = v, nightFilter = if (v && it.nightFilter == 0f) 0.35f else it.nightFilter) }
+            }
+            if (s.nightSchedule) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("From", style = Folio.type.body, color = c.secondaryLabel)
+                    Spacer(Modifier.width(8.dp))
+                    TimeChip(NightSchedule.format(s.nightFrom)) { picking = true }
+                    Spacer(Modifier.width(8.dp))
+                    Text("to", style = Folio.type.body, color = c.secondaryLabel)
+                    Spacer(Modifier.width(8.dp))
+                    TimeChip(NightSchedule.format(s.nightTo)) { picking = false }
+                }
+            }
+        }
+        if (s.nightSchedule) {
+            val on = NightSchedule.active(s.nightFrom, s.nightTo)
+            Text(
+                if (on) "On now, until ${NightSchedule.format(s.nightTo)}." else "Comes on at ${NightSchedule.format(s.nightFrom)}.",
+                style = Folio.type.caption, color = c.secondaryLabel, modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+            )
+        }
+    }
+    picking?.let { start ->
+        val minutes = if (start) s.nightFrom else s.nightTo
+        val time = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60)
+        AlertDialog(
+            onDismissRequest = { picking = null },
+            containerColor = c.elevated,
+            title = { Text(if (start) "Filter comes on" else "Filter goes off", style = Folio.type.headline) },
+            text = { TimePicker(time) },
+            confirmButton = {
+                TextButton({
+                    val m = time.hour * 60 + time.minute
+                    Graph.settings.update { if (start) it.copy(nightFrom = m) else it.copy(nightTo = m) }
+                    picking = null
+                }) { Text("Set") }
+            },
+            dismissButton = { TextButton({ picking = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun TimeChip(text: String, onClick: () -> Unit) {
+    val c = Folio.colors
+    Text(
+        text, style = Folio.type.subheadStrong, color = c.accent,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.accentSoft).pressable(onClick = onClick, pressedScale = 0.95f).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable

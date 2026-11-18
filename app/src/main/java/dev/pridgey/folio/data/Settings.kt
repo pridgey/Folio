@@ -26,6 +26,9 @@ enum class ReaderBackground(val label: String) { BLACK("Black"), GRAY("Gray"), W
 
 enum class PageScale(val label: String) { FIT_SCREEN("Fit screen"), FIT_WIDTH("Fit width"), ORIGINAL("Original") }
 
+/** How a page turn looks in the paged reader. */
+enum class PageEffect(val label: String) { SLIDE("Slide"), STACK("Stack"), FADE("Fade"), TURN("Turn") }
+
 enum class LibrarySort(val label: String) { LAST_READ("Recently read"), LAST_UPDATED("New chapters"), UNREAD("Unread"), TITLE("Title"), DATE_ADDED("Date added") }
 
 /**
@@ -47,6 +50,15 @@ class Settings(context: Context) {
         val webtoonGap: Boolean = false,
         val showPageNumber: Boolean = true,
         val nightFilter: Float = 0f,
+        /** When on, the night filter only shows between [nightFrom] and [nightTo] (minutes after midnight). */
+        val nightSchedule: Boolean = false,
+        val nightFrom: Int = 21 * 60,
+        val nightTo: Int = 7 * 60,
+        val pageEffect: PageEffect = PageEffect.STACK,
+        val chapterHaptics: Boolean = true,
+        /** Two pages side by side when the window is wide (tablets, landscape). */
+        val spreads: Boolean = true,
+        val autoCrop: Boolean = false,
         val updateIntervalHours: Int = 12,
         val updateOnlyOnWifi: Boolean = true,
         val notifyNewChapters: Boolean = true,
@@ -88,6 +100,13 @@ class Settings(context: Context) {
             webtoonGap = getBoolean("webtoonGap", d.webtoonGap),
             showPageNumber = getBoolean("showPageNumber", d.showPageNumber),
             nightFilter = getFloat("nightFilter", d.nightFilter),
+            nightSchedule = getBoolean("nightSchedule", d.nightSchedule),
+            nightFrom = getInt("nightFrom", d.nightFrom),
+            nightTo = getInt("nightTo", d.nightTo),
+            pageEffect = enum("pageEffect", d.pageEffect),
+            chapterHaptics = getBoolean("chapterHaptics", d.chapterHaptics),
+            spreads = getBoolean("spreads", d.spreads),
+            autoCrop = getBoolean("autoCrop", d.autoCrop),
             updateIntervalHours = getInt("updateIntervalHours", d.updateIntervalHours),
             updateOnlyOnWifi = getBoolean("updateOnlyOnWifi", d.updateOnlyOnWifi),
             notifyNewChapters = getBoolean("notifyNewChapters", d.notifyNewChapters),
@@ -114,6 +133,13 @@ class Settings(context: Context) {
         .putBoolean("webtoonGap", v.webtoonGap)
         .putBoolean("showPageNumber", v.showPageNumber)
         .putFloat("nightFilter", v.nightFilter)
+        .putBoolean("nightSchedule", v.nightSchedule)
+        .putInt("nightFrom", v.nightFrom)
+        .putInt("nightTo", v.nightTo)
+        .putString("pageEffect", v.pageEffect.name)
+        .putBoolean("chapterHaptics", v.chapterHaptics)
+        .putBoolean("spreads", v.spreads)
+        .putBoolean("autoCrop", v.autoCrop)
         .putInt("updateIntervalHours", v.updateIntervalHours)
         .putBoolean("updateOnlyOnWifi", v.updateOnlyOnWifi)
         .putBoolean("notifyNewChapters", v.notifyNewChapters)
