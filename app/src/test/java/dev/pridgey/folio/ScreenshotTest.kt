@@ -12,6 +12,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import androidx.navigation.compose.rememberNavController
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -119,6 +122,27 @@ class ScreenshotTest {
 
     @Test fun libraryDark() {
         shoot("library_dark", true) { HomeScreen(null) {} }
+    }
+
+    @Test fun bookcase() {
+        Graph.settings.update { it.copy(bookcase = true) }
+        shoot("bookcase_light", false) { HomeScreen(null) {} }
+    }
+
+    @Test fun bookcaseDark() {
+        Graph.settings.update { it.copy(bookcase = true) }
+        shoot("bookcase_dark", true) { HomeScreen(null) {} }
+    }
+
+    /** A finger resting partway along the first shelf, so the lift and the label show. */
+    @Test fun bookcaseScrub() {
+        Graph.settings.update { it.copy(bookcase = true) }
+        shoot("bookcase_scrub_light", false) { HomeScreen(null) {} }
+        val node = compose.onNodeWithTag("bookcase-shelf-0")
+        node.performTouchInput { down(Offset(width * 0.3f, height * 0.6f)); moveTo(Offset(width * 0.42f, height * 0.6f)) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("screenshots/bookcase_scrub_light.png")
     }
 
     @Test fun updates() {

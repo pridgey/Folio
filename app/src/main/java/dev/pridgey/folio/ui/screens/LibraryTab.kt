@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -174,9 +175,9 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
     var newShelf by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<dev.pridgey.folio.data.ShelfEntity?>(null) }
     if (refreshing && sync == null) refreshing = false
-    // Books stand inside the grid's 16dp margins and the bookcase's frame.
+    // Books stand inside the grid's 16dp margins.
     val density = LocalDensity.current
-    val bookcaseWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value } - 32f - 2f * Spines.FRAME
+    val bookcaseWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value } - 32f
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
@@ -312,8 +313,7 @@ fun LibraryTab(glass: GlassState, onDiscover: () -> Unit, vm: LibraryViewModel =
                         val rows = Spines.rows(list, available = bookcaseWidth)
                         itemsIndexed(rows, key = { _, row -> "shelf-row-${row.first().id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { i, row ->
                             BookcaseShelf(
-                                row, first = i == 0, joinBelow = i < rows.lastIndex, gridSpacing = 18,
-                                modifier = Modifier.animateItem(), onLongClick = { organizing = it },
+                                row, modifier = Modifier.animateItem().testTag("bookcase-shelf-$i"), onLongClick = { organizing = it },
                             ) { item ->
                                 nav.details(item.id, item.sourceId, item.thumbnailUrl)
                             }
