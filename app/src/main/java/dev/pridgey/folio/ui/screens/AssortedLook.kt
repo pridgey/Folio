@@ -207,6 +207,8 @@ internal object AssortedLook : GalleryLook() {
 
     override fun restyle(item: LibraryItem) = Graph.spineVariants.next(SpineArt.key(item.title))
 
+    override fun unstyle(item: LibraryItem) = Graph.spineVariants.reset(SpineArt.key(item.title))
+
     @Composable
     override fun Spine(b: Book, pull: Float, dark: Boolean) {
         val variants by Graph.spineVariants.variants.collectAsStateWithLifecycle()

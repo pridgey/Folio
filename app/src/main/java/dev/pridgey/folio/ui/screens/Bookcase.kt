@@ -274,7 +274,8 @@ internal fun BookcaseShelf(
                                     if (event == null) {
                                         held = true
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        nearest(touchX ?: down.position.x)?.let { latestLongClick(it) }
+                                        // Two fingers held: the easter egg's undo. One: the book's options.
+                                        nearest(touchX ?: down.position.x)?.let { if (twoFingers) look.unstyle(it) else latestLongClick(it) }
                                         continue
                                     }
                                     if (event.changes.count { it.pressed } >= 2) twoFingers = true

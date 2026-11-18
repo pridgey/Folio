@@ -118,6 +118,9 @@ internal abstract class ShelfLook {
 
     /** The easter egg: move [item] on to its next design, for looks that have more than one. */
     open fun restyle(item: LibraryItem) = Unit
+
+    /** And back: [item] returns to its own design. */
+    open fun unstyle(item: LibraryItem) = Unit
 }
 
 internal fun lookFor(style: ShelfStyle): ShelfLook = when (style) {

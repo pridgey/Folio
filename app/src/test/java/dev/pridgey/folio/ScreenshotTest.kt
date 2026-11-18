@@ -176,6 +176,18 @@ class ScreenshotTest {
         // Exactly one book moved on by exactly one design.
         org.junit.Assert.assertEquals(before.values.sum() + 1, after.values.sum())
         compose.onRoot().captureRoboImage("screenshots/bookcase_assorted_after.png")
+
+        // A two-finger hold puts it back, without opening the book's options.
+        compose.onNodeWithTag("bookcase-shelf-0").performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.7f))
+            down(1, Offset(width * 0.1f + 6f, height * 0.75f))
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 200)
+            up(1)
+            up(0)
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        org.junit.Assert.assertEquals(before, Graph.spineVariants.variants.value)
     }
 
     @Test fun bookcaseDark() {
