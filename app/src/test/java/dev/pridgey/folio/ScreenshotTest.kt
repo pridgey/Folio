@@ -144,14 +144,16 @@ class ScreenshotTest {
                 CompositionLocalProvider(LocalNav provides Nav(controller, context, scope)) { HomeScreen(null) {} }
             }
         }
+        // Some styles animate forever (candlelight); step the clock by hand so the test can settle.
+        compose.mainClock.autoAdvance = false
         dev.pridgey.folio.data.ShelfStyle.entries.forEach { style ->
             listOf(false, true).forEach { d ->
                 dark = d
                 Graph.settings.update { it.copy(bookcase = true, shelfStyle = style) }
-                compose.waitForIdle()
-                Thread.sleep(300)
-                compose.mainClock.advanceTimeBy(1_500)
-                compose.waitForIdle()
+                repeat(6) {
+                    compose.mainClock.advanceTimeBy(250)
+                    Thread.sleep(120)
+                }
                 compose.onRoot().captureRoboImage("screenshots/shelf_${style.name.lowercase()}_${if (d) "dark" else "light"}.png")
             }
         }

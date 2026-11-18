@@ -141,6 +141,10 @@ internal class ShelfRow(
     val first: Boolean,
     val last: Boolean,
     val dark: Boolean,
+    /** Where the finger is on the wall, in px, while touching. */
+    val touch: Float? = null,
+    /** How far each book is lifted, 0 to 1. */
+    val pulls: List<Float> = emptyList(),
 )
 
 /**
@@ -205,7 +209,7 @@ internal fun BookcaseShelf(
             },
     ) {
         val marginPx = with(density) { margin.toPx() }
-        look.Backdrop(ShelfRow(books, centers.map { it + marginPx }, first, last, dark), Modifier.fillMaxWidth()) {
+        look.Backdrop(ShelfRow(books, centers.map { it + marginPx }, first, last, dark, touchX?.let { it + marginPx }, pulls.map { it.value }), Modifier.fillMaxWidth()) {
             Column(
                 Modifier
                     .fillMaxWidth()

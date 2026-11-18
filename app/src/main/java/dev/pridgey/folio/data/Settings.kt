@@ -34,16 +34,17 @@ enum class DownloadPace(val label: String, val gapMs: Long) { FAST("Fast", 0), B
 
 /** How the bookcase is drawn. */
 enum class ShelfStyle(val label: String, val blurb: String) {
-    COLLECTION("Collection", "Cream paper spines, black capitals, a chip of colour"),
-    PAPERBACK("Paperback", "Three-band paperbacks in each cover's colour"),
-    TANKOBON("Tankōbon", "White manga spines with art at the head"),
     GALLERY("Gallery", "Cover art under warm spotlights on a dark wall"),
-    NEON("Neon", "Glowing tubes in the night, reflected below"),
-    GLASS("Glass", "Frosted panes of each cover over a soft aura"),
-    CLAY("Clay", "Soft, rounded pastel books that bounce"),
-    RISO("Riso", "Two-ink risograph prints on grainy paper"),
-    SWISS("Swiss", "Bold flat blocks and big chapter numbers"),
-    DIMENSIONAL("Dimensional", "Solid 3D books with page edges, on a slab"),
+    SPOTLIGHT("Spotlight", "A dark room; one light follows your finger"),
+    WHITE_CUBE("White Cube", "A bright gallery, a floating shelf, wall labels"),
+    SALON("Salon", "Oxblood walls and brass picture lights"),
+    MOONLIGHT("Moonlight", "After hours, moonlight through the windows"),
+    VITRINE("Vitrine", "Under glass in a lit display case"),
+    CONCRETE("Concrete", "Raw concrete, track lights and a steel ledge"),
+    MONOCHROME("Monochrome", "Black and white until you start a title"),
+    CANDLELIGHT("Candlelight", "A warm glow that flickers from below"),
+    MOUNTED("Mounted", "Hung on the wall like framed art, no shelf"),
+    HALO("Halo", "Each book backlit in its own colour"),
 }
 
 enum class LibrarySort(val label: String) { LAST_READ("Recently read"), LAST_UPDATED("New chapters"), UNREAD("Unread"), TITLE("Title"), DATE_ADDED("Date added") }
@@ -96,7 +97,7 @@ class Settings(context: Context) {
         val libraryColumns: Int = 3,
         /** Library as spines on a bookcase instead of a cover grid. */
         val bookcase: Boolean = false,
-        val shelfStyle: ShelfStyle = ShelfStyle.COLLECTION,
+        val shelfStyle: ShelfStyle = ShelfStyle.GALLERY,
         val onboarded: Boolean = false,
         val lastUpdatesSeen: Long = 0,
     )
