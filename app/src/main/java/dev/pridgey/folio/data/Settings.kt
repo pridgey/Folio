@@ -75,6 +75,8 @@ class Settings(context: Context) {
         val nightTo: Int = 7 * 60,
         val pageEffect: PageEffect = PageEffect.STACK,
         val chapterHaptics: Boolean = true,
+        /** Moving on from a chapter passes over other uploads of it (and marks them read). */
+        val skipDuplicates: Boolean = true,
         /** Two pages side by side when the window is wide (tablets, landscape). */
         val spreads: Boolean = true,
         val autoCrop: Boolean = false,
@@ -138,6 +140,7 @@ class Settings(context: Context) {
             nightTo = getInt("nightTo", d.nightTo),
             pageEffect = enum("pageEffect", d.pageEffect),
             chapterHaptics = getBoolean("chapterHaptics", d.chapterHaptics),
+            skipDuplicates = getBoolean("skipDuplicates", d.skipDuplicates),
             spreads = getBoolean("spreads", d.spreads),
             autoCrop = getBoolean("autoCrop", d.autoCrop),
             downloadAhead = getInt("downloadAhead", d.downloadAhead),
@@ -179,6 +182,7 @@ class Settings(context: Context) {
         .putInt("nightTo", v.nightTo)
         .putString("pageEffect", v.pageEffect.name)
         .putBoolean("chapterHaptics", v.chapterHaptics)
+        .putBoolean("skipDuplicates", v.skipDuplicates)
         .putBoolean("spreads", v.spreads)
         .putBoolean("autoCrop", v.autoCrop)
         .putInt("downloadAhead", v.downloadAhead)

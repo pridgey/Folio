@@ -105,8 +105,13 @@ class ReaderViewModel(app: Application, private var mangaId: Long, startChapterI
         if (_state.value.titleMode == ReaderMode.AUTO) refineAuto(pages)
     }
 
-    private fun previous(c: ChapterEntity) = order.getOrNull(order.indexOfFirst { it.id == c.id } - 1)
-    private fun next(c: ChapterEntity) = order.getOrNull(order.indexOfFirst { it.id == c.id } + 1)
+    private fun previous(c: ChapterEntity) =
+        if (Graph.settings.current.skipDuplicates) ChapterDuplicates.step(order, c, forward = false)
+        else order.getOrNull(order.indexOfFirst { it.id == c.id } - 1)
+
+    private fun next(c: ChapterEntity) =
+        if (Graph.settings.current.skipDuplicates) ChapterDuplicates.step(order, c)
+        else order.getOrNull(order.indexOfFirst { it.id == c.id } + 1)
 
     private suspend fun loadPages(chapter: ChapterEntity): List<ReaderItem> {
         loaded += chapter.id
@@ -173,6 +178,15 @@ class ReaderViewModel(app: Application, private var mangaId: Long, startChapterI
             repo.setFavorite(manga.id, true)
             _state.update { s -> s.copy(manga = s.manga?.copy(favorite = true)) }
             Toast.makeText(getApplication(), "Added ${manga.displayTitle} to your library", Toast.LENGTH_SHORT).show()
+        }
+        // Other uploads of this chapter count as read too, so they aren't waiting as unread.
+        if (Graph.settings.current.skipDuplicates) {
+            val copies = ChapterDuplicates.of(order, chapter).filter { !it.read }
+            if (copies.isNotEmpty()) {
+                repo.setRead(copies.map { it.id }, true)
+                val ids = copies.map { it.id }.toSet()
+                order = order.map { if (it.id in ids) it.copy(read = true) else it }
+            }
         }
         if (Graph.settings.current.deleteAfterRead && chapter.id in Graph.downloads.downloaded.value) {
             Graph.downloads.delete(mangaId, listOf(chapter.id))

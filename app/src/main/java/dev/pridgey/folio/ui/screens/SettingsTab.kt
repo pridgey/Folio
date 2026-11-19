@@ -15,6 +15,15 @@ import androidx.compose.material.icons.rounded.Vibration
 import dev.pridgey.folio.data.PageEffect
 
 import android.content.Context
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.FilterNone
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import dev.pridgey.folio.reader.NightSchedule
+import dev.pridgey.folio.reader.NightTimeDialog
+import kotlin.math.roundToInt
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -103,6 +112,7 @@ private val Purple = Color(0xFFAF52DE)
 private val Gray = Color(0xFF8E8E93)
 private val Red = Color(0xFFFF3B30)
 private val Teal = Color(0xFF30B0C7)
+private val Indigo = Color(0xFF5856D6)
 
 @Composable
 fun SettingsTab(glass: GlassState) {
@@ -177,8 +187,15 @@ fun SettingsTab(glass: GlassState) {
                     ToggleRow("Two pages on wide screens", s.spreads, { v -> update { it.copy(spreads = v) } }, icon = Icons.Rounded.MenuBook, iconBackground = Blue)
                     GroupedDivider(59.dp)
                     ToggleRow("Trim page margins", s.autoCrop, { v -> update { it.copy(autoCrop = v) } }, icon = Icons.Rounded.Crop, iconBackground = Green)
+                    GroupedDivider(59.dp)
+                    ToggleRow(
+                        "Skip duplicate chapters", s.skipDuplicates, { v -> update { it.copy(skipDuplicates = v) } },
+                        subtitle = "Moving on passes over other uploads of a chapter", icon = Icons.Rounded.FilterNone, iconBackground = Gray,
+                    )
                 }
             }
+
+            item { NightFilterSection(s) }
 
             item {
                 GroupedSection(header = "Library", footer = "Once you finish a chapter of a title, Folio adds it to your library. It checks your library for new chapters in the background and lets you know.") {
@@ -275,6 +292,41 @@ fun SettingsTab(glass: GlassState) {
         }
         TopBar("Settings", glass, showTitle = scrolled)
     }
+}
+
+/** The reader's night filter, which applies to every title. */
+@Composable
+private fun NightFilterSection(s: dev.pridgey.folio.data.Settings.Values) {
+    val c = Folio.colors
+    var picking by remember { mutableStateOf<Boolean?>(null) } // true: start time, false: end time
+    val update = { f: (dev.pridgey.folio.data.Settings.Values) -> dev.pridgey.folio.data.Settings.Values -> Graph.settings.update(f) }
+    GroupedSection(
+        header = "Night filter",
+        footer = when {
+            !s.nightSchedule -> "Dims and warms pages in the reader, for every title."
+            NightSchedule.active(s.nightFrom, s.nightTo) -> "On now, until ${NightSchedule.format(s.nightTo)}."
+            else -> "Comes on at ${NightSchedule.format(s.nightFrom)}."
+        },
+    ) {
+        GroupedRow("Strength", icon = Icons.Rounded.DarkMode, iconBackground = Indigo, value = if (s.nightFilter == 0f) "Off" else "${(s.nightFilter / 0.7f * 100).roundToInt()}%")
+        Slider(
+            value = s.nightFilter, onValueChange = { v -> update { it.copy(nightFilter = v) } }, valueRange = 0f..0.7f,
+            colors = SliderDefaults.colors(thumbColor = c.warning, activeTrackColor = c.warning, inactiveTrackColor = c.fill),
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        GroupedDivider(59.dp)
+        ToggleRow("On a schedule", s.nightSchedule, { v ->
+            // Turning the schedule on with the filter at zero would do nothing, so give it a starting strength.
+            update { it.copy(nightSchedule = v, nightFilter = if (v && it.nightFilter == 0f) 0.35f else it.nightFilter) }
+        }, icon = Icons.Rounded.Schedule, iconBackground = Orange)
+        if (s.nightSchedule) {
+            GroupedDivider(59.dp)
+            GroupedRow("Comes on", icon = Icons.Rounded.Bedtime, iconBackground = Purple, value = NightSchedule.format(s.nightFrom), onClick = { picking = true })
+            GroupedDivider(59.dp)
+            GroupedRow("Goes off", icon = Icons.Rounded.WbSunny, iconBackground = Orange, value = NightSchedule.format(s.nightTo), onClick = { picking = false })
+        }
+    }
+    picking?.let { start -> NightTimeDialog(start, s) { picking = null } }
 }
 
 private fun aheadLabel(n: Int) = if (n == 0) "Off" else "$n chapters"

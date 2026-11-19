@@ -2,6 +2,7 @@ package dev.pridgey.folio
 
 import android.graphics.Color
 import dev.pridgey.folio.data.ChapterEntity
+import dev.pridgey.folio.reader.ChapterDuplicates
 import dev.pridgey.folio.reader.CropBorders
 import dev.pridgey.folio.reader.NightSchedule
 import dev.pridgey.folio.reader.ReaderItem
@@ -36,6 +37,26 @@ class FeatureLogicTest {
     @Test fun nightScheduleWithinADay() {
         assertTrue(NightSchedule.active(13 * 60, 15 * 60, LocalTime.of(14, 0)))
         assertFalse(NightSchedule.active(13 * 60, 15 * 60, LocalTime.of(16, 0)))
+    }
+
+    private fun upload(id: Long, number: Float, group: String?) =
+        ChapterEntity(id = id, mangaId = 1, url = "/$id", name = "Ch. $number", number = number, scanlator = group)
+
+    @Test fun duplicatesArePassedOverKeepingToTheSameGroup() {
+        // Reading order: 1 (A), 2 (B), 2 (A), 3 (A), 3 (B), 4 (unnumbered)
+        val order = listOf(upload(1, 1f, "A"), upload(2, 2f, "B"), upload(3, 2f, "A"), upload(4, 3f, "A"), upload(5, 3f, "B"), upload(6, -1f, null))
+        assertEquals(3L, ChapterDuplicates.step(order, order[0])?.id) // chapter 2 from group A
+        assertEquals(5L, ChapterDuplicates.step(order, order[1])?.id) // past 2 (A), on to 3 from group B
+        assertEquals(4L, ChapterDuplicates.step(order, order[2])?.id)
+        assertEquals(6L, ChapterDuplicates.step(order, order[4])?.id)
+        assertEquals(3L, ChapterDuplicates.step(order, order[3], forward = false)?.id) // back to 2, same group
+        assertEquals(1L, ChapterDuplicates.step(order, order[1], forward = false)?.id)
+        assertEquals(listOf(3L), ChapterDuplicates.of(order, order[1]).map { it.id })
+    }
+
+    @Test fun lastChapterWithOnlyDuplicatesAfterHasNoNext() {
+        val order = listOf(upload(1, 5f, "A"), upload(2, 5f, "B"))
+        assertNull(ChapterDuplicates.step(order, order[0]))
     }
 
     private fun chapter(id: Long) = ChapterEntity(id = id, mangaId = 1, url = "/$id", name = "$id")

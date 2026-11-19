@@ -736,6 +736,7 @@ private fun ReaderSettingsSheet(vm: ReaderViewModel, state: ReaderViewModel.Stat
                     Text("Automatic is using ${state.mode.label.lowercase()}.", style = Folio.type.caption, color = c.secondaryLabel, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
                 }
             }
+            Text("Everything below applies to every title.", style = Folio.type.caption, color = c.secondaryLabel, modifier = Modifier.padding(start = 2.dp))
             if (state.mode != ReaderMode.WEBTOON) {
                 Column {
                     Label("Page size")
@@ -758,6 +759,7 @@ private fun ReaderSettingsSheet(vm: ReaderViewModel, state: ReaderViewModel.Stat
                 if (state.mode == ReaderMode.RIGHT_TO_LEFT || state.mode == ReaderMode.LEFT_TO_RIGHT) {
                     SheetToggle("Two pages on wide screens", s.spreads) { v -> Graph.settings.update { it.copy(spreads = v) } }
                 }
+                SheetToggle("Skip duplicate chapters", s.skipDuplicates) { v -> Graph.settings.update { it.copy(skipDuplicates = v) } }
                 SheetToggle("Buzz at the end of a chapter", s.chapterHaptics) { v -> Graph.settings.update { it.copy(chapterHaptics = v) } }
                 SheetToggle("Tap the sides to turn pages", s.tapZones) { v -> Graph.settings.update { it.copy(tapZones = v) } }
                 SheetToggle("Volume buttons turn pages", s.volumeKeys) { v -> Graph.settings.update { it.copy(volumeKeys = v) } }
@@ -808,24 +810,28 @@ private fun NightFilterControls(s: Settings.Values) {
             )
         }
     }
-    picking?.let { start ->
-        val minutes = if (start) s.nightFrom else s.nightTo
-        val time = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60)
-        AlertDialog(
-            onDismissRequest = { picking = null },
-            containerColor = c.elevated,
-            title = { Text(if (start) "Filter comes on" else "Filter goes off", style = Folio.type.headline) },
-            text = { TimePicker(time) },
-            confirmButton = {
-                TextButton({
-                    val m = time.hour * 60 + time.minute
-                    Graph.settings.update { if (start) it.copy(nightFrom = m) else it.copy(nightTo = m) }
-                    picking = null
-                }) { Text("Set") }
-            },
-            dismissButton = { TextButton({ picking = null }) { Text("Cancel") } },
-        )
-    }
+    picking?.let { start -> NightTimeDialog(start, s) { picking = null } }
+}
+
+/** Picks when the night filter comes on ([start]) or goes off. Shared with the Settings tab. */
+@Composable
+internal fun NightTimeDialog(start: Boolean, s: Settings.Values, onDismiss: () -> Unit) {
+    val minutes = if (start) s.nightFrom else s.nightTo
+    val time = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Folio.colors.elevated,
+        title = { Text(if (start) "Filter comes on" else "Filter goes off", style = Folio.type.headline) },
+        text = { TimePicker(time) },
+        confirmButton = {
+            TextButton({
+                val m = time.hour * 60 + time.minute
+                Graph.settings.update { if (start) it.copy(nightFrom = m) else it.copy(nightTo = m) }
+                onDismiss()
+            }) { Text("Set") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

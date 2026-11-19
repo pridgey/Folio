@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import coil3.size.Size
 import coil3.transform.Transformation
+import dev.pridgey.folio.data.ChapterEntity
 import dev.pridgey.folio.data.PageEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -142,6 +143,34 @@ class CropBorders(private val sidesOnly: Boolean) : Transformation() {
 
         private fun luma(c: Int) = (((c shr 16) and 0xFF) * 299 + ((c shr 8) and 0xFF) * 587 + (c and 0xFF) * 114) / 1000
     }
+}
+
+// ------------------------------------------------------------------ Duplicate chapters
+
+/**
+ * Sources often list the same chapter more than once, uploaded by different groups. Moving on from a
+ * chapter passes over other uploads of it, and of the next chapter takes the one from the same group
+ * when there is one.
+ */
+object ChapterDuplicates {
+    /** The chapter after [current] in [order] (reading order), or before it when [forward] is false. */
+    fun step(order: List<ChapterEntity>, current: ChapterEntity, forward: Boolean = true): ChapterEntity? {
+        val i = order.indexOfFirst { it.id == current.id }
+        if (i < 0) return null
+        val rest = if (forward) order.drop(i + 1) else order.take(i).asReversed()
+        if (current.number < 0) return rest.firstOrNull()
+        val from = rest.indexOfFirst { it.number != current.number }
+        if (from < 0) return null
+        val candidate = rest[from]
+        if (candidate.number < 0) return candidate
+        // Only the uploads listed together, so nothing in between is passed over.
+        val run = rest.drop(from).takeWhile { it.number == candidate.number }
+        return run.firstOrNull { it.scanlator == current.scanlator } ?: candidate
+    }
+
+    /** Other uploads of [chapter] in [order]. */
+    fun of(order: List<ChapterEntity>, chapter: ChapterEntity): List<ChapterEntity> =
+        if (chapter.number < 0) emptyList() else order.filter { it.number == chapter.number && it.id != chapter.id }
 }
 
 // ------------------------------------------------------------------ Night filter schedule
