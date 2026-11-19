@@ -175,6 +175,7 @@ private fun ReaderBody(
         if (items.isEmpty()) {
             CircularProgressIndicator(Modifier.align(Alignment.Center).size(28.dp), color = Color.White.copy(alpha = 0.6f), strokeWidth = 2.5.dp)
         } else {
+          Box(Modifier.fillMaxSize().leaveSystemGestures()) {
             // Recreate the viewer when the reader is reset (new chapter, new mode) so it starts at the right page.
             androidx.compose.runtime.key(state.resetToken, state.mode) {
                 if (state.mode == ReaderMode.WEBTOON) {
@@ -183,6 +184,7 @@ private fun ReaderBody(
                     PagedReader(vm, items, state.startIndex, state.mode, settings, pageKeys, toggleChrome)
                 }
             }
+          }
         }
 
         // Night filter: dims and warms the page, around the clock or on its schedule.

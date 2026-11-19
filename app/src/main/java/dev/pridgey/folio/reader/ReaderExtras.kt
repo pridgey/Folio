@@ -1,8 +1,20 @@
 package dev.pridgey.folio.reader
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -13,6 +25,40 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
 import kotlin.math.abs
+
+// ------------------------------------------------------------------ System gestures
+
+/**
+ * Leaves drags that start in the system's gesture areas (the home bar, the back edges, the status bar)
+ * to the system. Android shows the app the start of a home or back swipe before it takes the gesture
+ * over, so without this the page scrolls or turns on the way out. Taps there still reach the pages.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun Modifier.leaveSystemGestures(): Modifier {
+    val gestures = WindowInsets.systemGestures
+    val navigation = WindowInsets.navigationBarsIgnoringVisibility
+    val status = WindowInsets.statusBarsIgnoringVisibility
+    val direction = LocalLayoutDirection.current
+    return pointerInput(gestures, navigation, status, direction) {
+        awaitEachGesture {
+            // The initial pass runs before the pagers and lists below see the event.
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val p = down.position
+            // The bars are hidden while reading, so count their full height as well as the gesture insets.
+            val top = maxOf(gestures.getTop(this), status.getTop(this))
+            val bottom = maxOf(gestures.getBottom(this), navigation.getBottom(this))
+            val left = gestures.getLeft(this, direction)
+            val right = gestures.getRight(this, direction)
+            val atEdge = p.y < top || p.y > size.height - bottom || p.x < left || p.x > size.width - right
+            if (!atEdge) return@awaitEachGesture
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                event.changes.forEach { if (it.positionChanged()) it.consume() }
+            } while (event.changes.any { it.pressed })
+        }
+    }
+}
 
 // ------------------------------------------------------------------ Auto-crop
 
