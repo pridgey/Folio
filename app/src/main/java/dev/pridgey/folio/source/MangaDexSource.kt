@@ -119,6 +119,31 @@ class MangaDexSource(baseClient: OkHttpClient, private val json: Json, private v
         return get<PersonList>(url).data.mapNotNull { p -> p.attributes.name?.let { Person(p.id, it) } }
     }
 
+    /**
+     * English names MangaDex knows for the series called [title] on another source: the best match's
+     * English alternative titles first, then its main English-keyed title (often a romanisation).
+     * Empty when no series matches well enough or it has no other English name.
+     */
+    suspend fun englishTitles(title: String): List<String> {
+        if (title.isBlank()) return emptyList()
+        val url = "$API/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("title", title.trim())
+            .addQueryParameter("limit", "10")
+            .addQueryParameter("order[relevance]", "desc")
+            .apply { ALL_RATINGS.forEach { addQueryParameter("contentRating[]", it) } }
+            .build()
+        // MangaDex searches alternative titles too, so match against every name a candidate has.
+        val best = get<MangaList>(url).data
+            .map { m -> m to ((m.attributes.title.values + m.attributes.altTitles.flatMap { it.values }).maxOfOrNull { TitleMatcher.similarity(title, it) } ?: 0.0) }
+            .filter { it.second >= 0.72 }
+            .maxByOrNull { it.second }?.first ?: return emptyList()
+        val own = TitleMatcher.normalize(title)
+        return (best.attributes.altTitles.mapNotNull { it["en"] } + listOfNotNull(best.attributes.title["en"]))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && TitleMatcher.normalize(it) != own }
+            .distinctBy { TitleMatcher.normalize(it) }
+    }
+
     /** Everything an author or artist worked on, most followed first. */
     suspend fun byPerson(personId: String, page: Int): MangasPage = list(page) {
         addQueryParameter("authorOrArtist", personId)

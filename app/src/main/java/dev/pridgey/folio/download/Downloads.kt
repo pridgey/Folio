@@ -147,7 +147,7 @@ class Downloads(
             db.downloads().remove(listOf(item.chapterId))
             return true
         }
-        val label = "${manga.title} · ${chapter.name}"
+        val label = "${manga.displayTitle} · ${chapter.name}"
         val target = dir(manga.id, chapter.id)
         val sChapter = with(repo) { chapter.toSChapter() }
         try {

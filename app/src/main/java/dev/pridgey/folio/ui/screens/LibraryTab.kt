@@ -137,7 +137,7 @@ class LibraryViewModel : ViewModel() {
                 list.filter { it.id in on }
             }
         }
-        val filtered = if (q.isBlank()) scoped else scoped.filter { it.title.contains(q.trim(), ignoreCase = true) }
+        val filtered = if (q.isBlank()) scoped else scoped.filter { it.title.contains(q.trim(), ignoreCase = true) || it.sourceTitle.contains(q.trim(), ignoreCase = true) }
         when (settings.librarySort) {
             LibrarySort.LAST_READ -> filtered.sortedWith(compareByDescending<LibraryItem> { it.lastReadAt }.thenByDescending { it.dateAdded })
             LibrarySort.LAST_UPDATED -> filtered.sortedByDescending { it.latestUpload }

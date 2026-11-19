@@ -110,6 +110,7 @@ class LibraryRepository(
     suspend fun setFavorite(id: Long, favorite: Boolean) = manga.setFavorite(id, favorite, if (favorite) System.currentTimeMillis() else 0)
     suspend fun setReaderMode(id: Long, mode: ReaderMode) = manga.setReaderMode(id, mode.ordinal)
     suspend fun setSortDescending(id: Long, descending: Boolean) = manga.setSortDescending(id, descending)
+    suspend fun setEnglishTitle(id: Long, title: String?) = manga.setEnglishTitle(id, title?.trim()?.takeIf { it.isNotEmpty() })
     suspend fun setRead(ids: List<Long>, read: Boolean) = chapters.setRead(ids, read)
     suspend fun setBookmark(ids: List<Long>, bookmark: Boolean) = chapters.setBookmark(ids, bookmark)
     suspend fun clearHistory(mangaId: Long) = chapters.clearHistory(mangaId)
@@ -202,7 +203,7 @@ class LibraryRepository(
         }
         db.withTransaction {
             if (moved.isNotEmpty()) chapters.updateAll(moved)
-            manga.get(newId)?.let { manga.update(it.copy(readingStatus = old.readingStatus, readerMode = old.readerMode)) }
+            manga.get(newId)?.let { manga.update(it.copy(readingStatus = old.readingStatus, readerMode = old.readerMode, englishTitle = old.englishTitle ?: it.englishTitle)) }
             shelfDao.shelvesOf(mangaId).forEach { shelfDao.add(listOf(ShelfManga(it, newId))) }
             if (old.favorite) {
                 manga.setFavorite(newId, true, old.dateAdded.takeIf { it > 0 } ?: System.currentTimeMillis())
@@ -250,6 +251,7 @@ class LibraryRepository(
         val readingStatus: Int = 0,
         /** Names of the shelves the title is on. */
         val shelves: List<String> = emptyList(),
+        val englishTitle: String? = null,
     )
 
     @Serializable
@@ -265,6 +267,7 @@ class LibraryRepository(
                     .map { BackupChapter(it.url, it.read, it.lastPageRead, it.bookmark, it.lastReadAt) },
                 readingStatus = m.readingStatus,
                 shelves = shelfDao.shelvesOf(m.id).mapNotNull { shelfNames[it] },
+                englishTitle = m.englishTitle,
             )
         }
         return json.encodeToString(
@@ -288,6 +291,7 @@ class LibraryRepository(
             )
             manga.setFavorite(id, true, t.dateAdded.takeIf { it > 0 } ?: System.currentTimeMillis())
             manga.setReadingStatus(id, t.readingStatus)
+            t.englishTitle?.let { manga.setEnglishTitle(id, it) }
             t.shelves.mapNotNull { shelfIds[it] }.forEach { shelfDao.add(listOf(ShelfManga(it, id))) }
             runCatching { refresh(id) }
             val byUrl = chapters.forManga(id).associateBy { it.url }

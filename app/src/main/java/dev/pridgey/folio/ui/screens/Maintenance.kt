@@ -162,10 +162,10 @@ private fun UsageRow(u: Downloads.Usage, manga: MangaEntity?, share: Float, onCh
     var menu by remember { mutableStateOf(false) }
     Box {
         Row(Modifier.fillMaxWidth().pressable(onClick = { menu = true }, pressedScale = 0.99f).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Cover(manga?.sourceId ?: 0L, manga?.thumbnailUrl, manga?.title.orEmpty(), Modifier.width(44.dp), corner = 6.dp, elevation = 2.dp)
+            Cover(manga?.sourceId ?: 0L, manga?.thumbnailUrl, manga?.displayTitle.orEmpty(), Modifier.width(44.dp), corner = 6.dp, elevation = 2.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(manga?.title ?: "Removed title", style = Folio.type.subheadStrong, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(manga?.displayTitle ?: "Removed title", style = Folio.type.subheadStrong, color = c.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${Format.plural(u.chapters, "chapter")} · ${Format.bytes(u.bytes)}", style = Folio.type.footnote, color = c.secondaryLabel)
                 Spacer(Modifier.height(6.dp))
                 Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(c.fill)) {

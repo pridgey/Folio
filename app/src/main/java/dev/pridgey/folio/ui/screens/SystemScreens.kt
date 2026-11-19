@@ -470,7 +470,7 @@ fun DownloadsScreen() {
         titles.value = queue.associate { q ->
             val ch = Graph.library.chapter(q.chapterId)
             val m = Graph.library.get(q.mangaId)
-            q.chapterId to listOfNotNull(m?.title, ch?.name).joinToString(" · ")
+            q.chapterId to listOfNotNull(m?.displayTitle, ch?.name).joinToString(" · ")
         }
     }
 

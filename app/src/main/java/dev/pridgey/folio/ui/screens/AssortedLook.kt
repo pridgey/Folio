@@ -178,8 +178,8 @@ internal fun rememberSpineSource(b: Book): SpineSource? {
     val item = b.item
     val volumes by Graph.spineArt.covers.collectAsStateWithLifecycle()
     val scans by Graph.coverText.scans.collectAsStateWithLifecycle()
-    val titleKey = remember(item.title) { SpineArt.key(item.title) }
-    LaunchedEffect(titleKey) { Graph.spineArt.request(item.title) }
+    val titleKey = remember(item.sourceTitle) { SpineArt.key(item.sourceTitle) }
+    LaunchedEffect(titleKey) { Graph.spineArt.request(item.sourceTitle) }
     val urls = volumes[titleKey].orEmpty()
     val candidates = remember(urls, item.thumbnailUrl) {
         val start = if (urls.isEmpty()) 0 else ((b.seed ushr 5) % urls.size).toInt()
@@ -205,14 +205,14 @@ internal object AssortedLook : GalleryLook() {
     /** Stamped in silver foil, when the book has the foil finish. */
     private fun TextStyle.foiled(on: Boolean) = if (on) copy(brush = silver) else this
 
-    override fun restyle(item: LibraryItem) = Graph.spineVariants.next(SpineArt.key(item.title))
+    override fun restyle(item: LibraryItem) = Graph.spineVariants.next(SpineArt.key(item.sourceTitle))
 
-    override fun unstyle(item: LibraryItem) = Graph.spineVariants.reset(SpineArt.key(item.title))
+    override fun unstyle(item: LibraryItem) = Graph.spineVariants.reset(SpineArt.key(item.sourceTitle))
 
     @Composable
     override fun Spine(b: Book, pull: Float, dark: Boolean) {
         val variants by Graph.spineVariants.variants.collectAsStateWithLifecycle()
-        val variant = variants[remember(b.item.title) { SpineArt.key(b.item.title) }] ?: 0
+        val variant = variants[remember(b.item.sourceTitle) { SpineArt.key(b.item.sourceTitle) }] ?: 0
         val source = rememberSpineSource(b)
         val recipe = remember(b.seed, variant, source?.scan) {
             val drawn = recipeFor(b.seed, variant)

@@ -40,6 +40,9 @@ interface MangaDao {
     @Query("UPDATE manga SET readingStatus = :status WHERE id = :id")
     suspend fun setReadingStatus(id: Long, status: Int)
 
+    @Query("UPDATE manga SET englishTitle = :title WHERE id = :id")
+    suspend fun setEnglishTitle(id: Long, title: String?)
+
     @Query("SELECT * FROM manga WHERE favorite = 1 AND (author LIKE '%' || :name || '%' OR artist LIKE '%' || :name || '%')")
     fun byPerson(name: String): Flow<List<MangaEntity>>
 
@@ -58,7 +61,7 @@ interface MangaDao {
 
     @Query(
         """
-        SELECT m.id, m.sourceId, m.title, m.thumbnailUrl, m.lastUpdate, m.dateAdded, m.genres, m.readingStatus,
+        SELECT m.id, m.sourceId, COALESCE(m.englishTitle, m.title) AS title, m.title AS sourceTitle, m.thumbnailUrl, m.lastUpdate, m.dateAdded, m.genres, m.readingStatus,
             COALESCE(SUM(CASE WHEN c.read = 0 THEN 1 ELSE 0 END), 0) AS unread,
             COUNT(c.id) AS total,
             COALESCE(MAX(c.lastReadAt), 0) AS lastReadAt,
@@ -112,7 +115,7 @@ interface ChapterDao {
     /** The most recently read chapter of each title. */
     @Query(
         """
-        SELECT m.id AS mangaId, m.sourceId, m.title, m.thumbnailUrl, c.id AS chapterId, c.name AS chapterName,
+        SELECT m.id AS mangaId, m.sourceId, COALESCE(m.englishTitle, m.title) AS title, m.thumbnailUrl, c.id AS chapterId, c.name AS chapterName,
             c.number AS chapterNumber, c.lastPageRead, c.pageCount, c.read, c.lastReadAt
         FROM chapter c JOIN manga m ON m.id = c.mangaId
         WHERE c.lastReadAt > 0 AND c.lastReadAt = (SELECT MAX(c2.lastReadAt) FROM chapter c2 WHERE c2.mangaId = c.mangaId)
@@ -124,7 +127,7 @@ interface ChapterDao {
 
     @Query(
         """
-        SELECT m.id AS mangaId, m.sourceId, m.title, m.thumbnailUrl, c.id AS chapterId, c.name AS chapterName,
+        SELECT m.id AS mangaId, m.sourceId, COALESCE(m.englishTitle, m.title) AS title, m.thumbnailUrl, c.id AS chapterId, c.name AS chapterName,
             c.scanlator, c.read, c.lastPageRead, c.dateFetch, c.dateUpload
         FROM chapter c JOIN manga m ON m.id = c.mangaId
         WHERE m.favorite = 1 AND c.dateFetch > m.dateAdded + 60000

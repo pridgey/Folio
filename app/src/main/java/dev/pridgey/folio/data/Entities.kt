@@ -31,7 +31,12 @@ data class MangaEntity(
     val sortDescending: Boolean = true,
     /** A [ReadingStatus] ordinal. */
     @ColumnInfo(defaultValue = "0") val readingStatus: Int = 0,
-)
+    /** An English name the reader chose to see in place of the source's [title], or null to use that. */
+    val englishTitle: String? = null,
+) {
+    /** The name to show: the English title when one is set. */
+    val displayTitle: String get() = englishTitle ?: title
+}
 
 /** Where a title stands for the reader. Stored by ordinal, so only ever add to the end. */
 enum class ReadingStatus(val label: String) {
@@ -96,11 +101,12 @@ data class QueuedDownload(
     val addedAt: Long,
 )
 
-/** A library tile. */
+/** A library tile. [title] is the name to show; [sourceTitle] is the source's own, which keys spine art. */
 data class LibraryItem(
     val id: Long,
     val sourceId: Long,
     val title: String,
+    val sourceTitle: String,
     val thumbnailUrl: String?,
     val unread: Int,
     val total: Int,

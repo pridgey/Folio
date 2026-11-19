@@ -119,7 +119,7 @@ class FeatureLogicTest {
     }
 
     @Test fun bookcaseFillsShelvesWithoutOverflowing() {
-        fun book(id: Long, chapters: Int) = dev.pridgey.folio.data.LibraryItem(id, 1, "T$id", null, 0, chapters, 0, 0, 0, 0, null)
+        fun book(id: Long, chapters: Int) = dev.pridgey.folio.data.LibraryItem(id, 1, "T$id", "T$id", null, 0, chapters, 0, 0, 0, 0, null)
         val books = (1L..40L).map { book(it, (it * 17 % 400).toInt()) }
         val rows = dev.pridgey.folio.ui.screens.Spines.rows(books, available = 340f)
         assertEquals(books, rows.flatten())
@@ -131,7 +131,7 @@ class FeatureLogicTest {
     }
 
     @Test fun spineRecipesAreSteadyPerTitle() {
-        fun book(id: Long, title: String) = dev.pridgey.folio.data.LibraryItem(id, 1, title, null, 0, 10, 0, 0, 0, 0, null)
+        fun book(id: Long, title: String) = dev.pridgey.folio.data.LibraryItem(id, 1, title, title, null, 0, 10, 0, 0, 0, 0, null)
         val S = dev.pridgey.folio.ui.screens.Spines
         // The same title gets the same seed, whatever its id or source, and the same recipe every time.
         assertEquals(S.seed(book(1, "One Piece")), S.seed(book(99, " one piece ")))

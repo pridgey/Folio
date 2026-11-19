@@ -172,7 +172,7 @@ class ReaderViewModel(app: Application, private var mangaId: Long, startChapterI
         if (manga != null && !manga.favorite && Graph.settings.current.autoAddToLibrary) {
             repo.setFavorite(manga.id, true)
             _state.update { s -> s.copy(manga = s.manga?.copy(favorite = true)) }
-            Toast.makeText(getApplication(), "Added ${manga.title} to your library", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), "Added ${manga.displayTitle} to your library", Toast.LENGTH_SHORT).show()
         }
         if (Graph.settings.current.deleteAfterRead && chapter.id in Graph.downloads.downloaded.value) {
             Graph.downloads.delete(mangaId, listOf(chapter.id))

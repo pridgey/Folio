@@ -40,7 +40,7 @@ class LibraryUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
                     // New chapters may extend what smart downloads should hold.
                     runCatching { Graph.downloads.topUp(m.id) }
                     if (n > 0) {
-                        found += m.title to n
+                        found += m.displayTitle to n
                         if (settings.autoDownload) {
                             val newest = repo.chaptersOf(m.id).filter { !it.read }.sortedBy { it.sourceOrder }.take(n).map { it.id }
                             Graph.downloads.enqueue(m.id, newest)

@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -109,6 +112,10 @@ import dev.pridgey.folio.data.LibraryRepository
 import dev.pridgey.folio.data.MangaEntity
 import dev.pridgey.folio.data.ReadingStatus
 import androidx.compose.material.icons.rounded.Bookmarks
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import dev.pridgey.folio.image.CoverModel
 import dev.pridgey.folio.source.Health
 import dev.pridgey.folio.source.MangaDexSource
@@ -193,6 +200,7 @@ class DetailsViewModel(private val mangaId: Long) : ViewModel() {
 
     fun toggleLibrary() = viewModelScope.launch { manga.value?.let { repo.setFavorite(it.id, !it.favorite) } }
     fun toggleSort() = viewModelScope.launch { manga.value?.let { repo.setSortDescending(it.id, !it.sortDescending) } }
+    fun setEnglishTitle(title: String?) = viewModelScope.launch { repo.setEnglishTitle(mangaId, title) }
 
     fun select(id: Long) { selection.value = if (id in selection.value) selection.value - id else selection.value + id }
     fun selectAll() { selection.value = visibleChapters.value.orEmpty().map { it.id }.toSet() }
@@ -253,11 +261,12 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
     var exploring by remember { mutableStateOf(false) }
     var organizing by remember { mutableStateOf(false) }
     var migrating by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf(false) }
     val shelfIds by remember(route.mangaId) { Graph.library.shelvesOf(route.mangaId) }.collectAsStateWithLifecycle(emptyList())
     val allShelves by remember { Graph.library.shelves() }.collectAsStateWithLifecycle(emptyList())
     BackHandler(selecting) { vm.clearSelection() }
 
-    val title = manga?.title ?: ""
+    val title = manga?.displayTitle ?: ""
     val sourceId = manga?.sourceId ?: route.sourceId
     val cover = manga?.thumbnailUrl ?: route.cover
     val queued = remember(queue) { queue.map { it.chapterId }.toSet() }
@@ -447,6 +456,10 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                             onClick = { menu = false; organizing = true },
                         )
                         DropdownMenuItem(
+                            text = { Text("English title") }, leadingIcon = { Icon(Icons.Rounded.Translate, null) },
+                            onClick = { menu = false; naming = true },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Explore chapters") }, leadingIcon = { Icon(Icons.Rounded.GridView, null) },
                             onClick = { menu = false; if (!all.isNullOrEmpty()) exploring = true },
                         )
@@ -484,6 +497,11 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
     }
 
     if (organizing) OrganizeSheet(route.mangaId, title, onDismiss = { organizing = false })
+    if (naming) {
+        manga?.let { m ->
+            EnglishTitleDialog(m, onDismiss = { naming = false }, onSave = { vm.setEnglishTitle(it); naming = false })
+        }
+    }
     if (migrating) {
         manga?.let { m ->
             MigrateSheet(m, onMoved = { id, src -> migrating = false; nav.back(); nav.details(id, src) }, onDismiss = { migrating = false })
@@ -544,6 +562,11 @@ private fun Hero(sourceId: Long, cover: String?, title: String, manga: MangaEnti
                 Text(meta.uppercase(), style = Folio.type.eyebrow, color = c.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(8.dp))
                 Text(title, style = Folio.type.largeTitle, color = c.label, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                // With an English title showing, the source's own name stays close by.
+                if (manga?.englishTitle != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(manga.title, style = Folio.type.subhead, color = c.tertiaryLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
                 // Each name opens that person's page.
                 val people = listOfNotNull(manga?.author, manga?.artist).flatMap { it.split(',') }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 if (people.isNotEmpty()) {
@@ -767,4 +790,61 @@ private fun BulkAction(label: String, icon: androidx.compose.ui.graphics.vector.
         Icon(icon, label, tint = c.accent, modifier = Modifier.size(24.dp))
         Text(label, style = Folio.type.caption2, color = c.accent)
     }
+}
+
+/**
+ * Picks the English name shown for a title in place of the source's. MangaDex is asked for the English
+ * names it knows; any can be tapped in, or a name typed.
+ */
+@Composable
+private fun EnglishTitleDialog(manga: MangaEntity, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+    val c = Folio.colors
+    var text by remember { mutableStateOf(manga.englishTitle.orEmpty()) }
+    // Null while MangaDex is being asked.
+    var suggestions by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(manga.title) {
+        suggestions = runCatching { Graph.sources.mangaDex.englishTitles(manga.title) }.getOrDefault(emptyList())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.elevated,
+        title = { Text("English title", style = Folio.type.headline) },
+        text = {
+            Column {
+                Text("Shown in place of “${manga.title}” in your library, history and updates.", style = Folio.type.caption, color = c.secondaryLabel)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(text, { text = it.take(200) }, singleLine = true, placeholder = { Text("English title") }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Text("FROM MANGADEX", style = Folio.type.eyebrow, color = c.secondaryLabel)
+                Spacer(Modifier.height(6.dp))
+                when (val found = suggestions) {
+                    null -> CircularProgressIndicator(Modifier.padding(vertical = 6.dp).size(18.dp), color = c.accent, strokeWidth = 2.dp)
+                    else -> if (found.isEmpty()) {
+                        Text("No other English names found.", style = Folio.type.subhead, color = c.tertiaryLabel)
+                    } else {
+                        Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                            found.forEach { name ->
+                                val chosen = text.trim() == name
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).pressable(onClick = { text = name }, pressedScale = 0.98f)
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(name, style = Folio.type.body, color = c.label, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    if (chosen) Icon(Icons.Rounded.Check, null, tint = c.accent, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton({ onSave(text) }, enabled = text.isNotBlank()) { Text("Save") } },
+        dismissButton = {
+            Row {
+                if (manga.englishTitle != null) TextButton({ onSave(null) }) { Text("Use original") }
+                TextButton(onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }

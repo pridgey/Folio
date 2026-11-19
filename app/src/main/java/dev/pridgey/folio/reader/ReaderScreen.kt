@@ -654,7 +654,7 @@ private fun ReaderChrome(
                 // Tapping the title opens the title's page.
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).pressable(onClick = onTitle, pressedScale = 0.98f).padding(horizontal = 4.dp, vertical = 2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(state.manga?.title.orEmpty(), style = Folio.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Text(state.manga?.displayTitle.orEmpty(), style = Folio.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Open title", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(start = 4.dp).size(12.dp))
                     }
                     Text(state.current?.name.orEmpty(), style = Folio.type.headline, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -93,7 +93,7 @@ internal object Spines {
     }
 
     /** A seed from the title alone, which survives re-adding a title or moving it to another source. */
-    fun seed(item: LibraryItem): Long = item.title.trim().lowercase().hashCode().toLong() and 0xFFFFFFFFL
+    fun seed(item: LibraryItem): Long = item.sourceTitle.trim().lowercase().hashCode().toLong() and 0xFFFFFFFFL
 
     fun mix(id: Long, salt: Long): Long = ((id + salt) * 2654435761L) ushr 9
 
