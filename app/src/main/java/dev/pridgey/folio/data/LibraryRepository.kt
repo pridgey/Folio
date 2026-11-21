@@ -146,7 +146,10 @@ class LibraryRepository(
         return ordered.getOrNull(lastRead + 1) ?: ordered.firstOrNull { !it.read } ?: ordered.lastOrNull()
     }
 
-    suspend fun pruneUnused() = manga.pruneUnused()
+    /** Clears titles only seen in passing, sparing any waiting on their first sync. */
+    suspend fun pruneUnused() = manga.pruneUnused(
+        dev.pridgey.folio.work.TitleSync.state.value.let { s -> listOfNotNull(s.current) + s.waiting }.map { it.mangaId },
+    )
 
     /** Adds titles you've finished a chapter of, as reading one does from now on. */
     suspend fun addFinished(): Int = manga.addFinished(System.currentTimeMillis())

@@ -21,6 +21,10 @@ object Notifications {
     const val DOWNLOAD_ID = 2001
     const val LIBRARY_ID = 2002
     const val SYNC_ID = 2003
+    const val TITLE_SYNC_ID = 2004
+    private const val CHANNEL_TITLE_SYNC = "title_sync"
+    private const val CHANNEL_TITLE_READY = "title_ready"
+    private const val TITLE_READY_BASE = 3000
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -34,6 +38,12 @@ object Notifications {
                 },
                 NotificationChannel(CHANNEL_SYSTEM, "Library sync", NotificationManager.IMPORTANCE_MIN).apply {
                     description = "Shown while Folio checks your library for new chapters"
+                },
+                NotificationChannel(CHANNEL_TITLE_SYNC, "Title sync", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Shown while a title syncs in the background"
+                },
+                NotificationChannel(CHANNEL_TITLE_READY, "Title ready", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "When a title you synced is ready to read"
                 },
             ),
         )
@@ -83,6 +93,43 @@ object Notifications {
             .build()
         @Suppress("MissingPermission")
         NotificationManagerCompat.from(context).notify(LIBRARY_ID, n)
+    }
+
+    fun titleSyncProgress(context: Context, title: String?, waiting: Int): Notification =
+        NotificationCompat.Builder(context, CHANNEL_TITLE_SYNC)
+            .setSmallIcon(R.drawable.ic_stat_folio)
+            .setContentTitle(title?.let { "Syncing $it" } ?: "Syncing")
+            .apply { if (waiting > 0) setContentText("$waiting more in queue") }
+            .setProgress(0, 0, true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setOngoing(true)
+            .setContentIntent(openApp(context))
+            .build()
+
+    fun titleReady(context: Context, entry: TitleSync.Entry) =
+        titleResult(context, entry, "${entry.title} is ready", "Tap to start reading")
+
+    fun titleSyncFailed(context: Context, entry: TitleSync.Entry, reason: String) =
+        titleResult(context, entry, "Couldn't sync ${entry.title}", "$reason Tap to try again.")
+
+    private fun titleResult(context: Context, entry: TitleSync.Entry, title: String, text: String) {
+        if (!canNotify(context)) return
+        val open = PendingIntent.getActivity(
+            context, TITLE_READY_BASE + entry.mangaId.toInt(),
+            MainActivity.titleIntent(context, entry.mangaId, entry.sourceId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(context, CHANNEL_TITLE_READY)
+            .setSmallIcon(R.drawable.ic_stat_folio)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        @Suppress("MissingPermission")
+        NotificationManagerCompat.from(context).notify(TITLE_READY_BASE + entry.mangaId.toInt(), n)
     }
 
     fun canNotify(context: Context) =

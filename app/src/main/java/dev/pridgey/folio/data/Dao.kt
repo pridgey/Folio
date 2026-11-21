@@ -56,8 +56,8 @@ interface MangaDao {
     @Query("UPDATE manga SET favorite = 1, dateAdded = :now WHERE favorite = 0 AND id IN (SELECT mangaId FROM chapter WHERE read = 1)")
     suspend fun addFinished(now: Long): Int
 
-    @Query("DELETE FROM manga WHERE favorite = 0 AND id NOT IN (SELECT mangaId FROM chapter WHERE lastReadAt > 0) AND id NOT IN (SELECT mangaId FROM download_queue)")
-    suspend fun pruneUnused()
+    @Query("DELETE FROM manga WHERE favorite = 0 AND id NOT IN (SELECT mangaId FROM chapter WHERE lastReadAt > 0) AND id NOT IN (SELECT mangaId FROM download_queue) AND id NOT IN (:keep)")
+    suspend fun pruneUnused(keep: List<Long>)
 
     @Query(
         """

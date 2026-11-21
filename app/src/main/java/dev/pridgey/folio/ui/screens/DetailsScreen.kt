@@ -83,6 +83,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -135,6 +136,7 @@ import dev.pridgey.folio.ui.components.glassSource
 import dev.pridgey.folio.ui.components.pressable
 import dev.pridgey.folio.ui.components.rememberGlassState
 import dev.pridgey.folio.ui.theme.Folio
+import dev.pridgey.folio.work.TitleSync
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -177,6 +179,8 @@ class DetailsViewModel(private val mangaId: Long) : ViewModel() {
     init {
         viewModelScope.launch {
             val m = repo.get(mangaId) ?: return@launch
+            // A slow first load waits for the user to start it from the sync screen.
+            if (TitleSync.needsSync(m.sourceId, m.initialized, repo.chaptersOf(mangaId).size)) return@launch
             val stale = System.currentTimeMillis() - m.lastUpdate > 60 * 60 * 1000
             if (!m.initialized || stale || repo.chaptersOf(mangaId).isEmpty()) refresh()
         }
@@ -273,8 +277,25 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
     val next = remember(all) { all?.let { Graph.library.nextToRead(it) } }
     val sourceHealth = health[sourceId]
 
+    val syncState by TitleSync.state.collectAsStateWithLifecycle()
+    val syncFailures by TitleSync.failures.collectAsStateWithLifecycle()
+    val current = manga
+    val loaded = all
+    val needsSync = current != null && loaded != null && TitleSync.needsSync(current.sourceId, current.initialized, loaded.size)
+    // The sync screen is opt-in: the title's page shows first, and asking to read it leads here.
+    var wantsSync by rememberSaveable(route.mangaId) { mutableStateOf(false) }
+    val syncError = syncFailures[route.mangaId]
+    if (needsSync && (wantsSync || syncError != null || syncState.contains(route.mangaId))) {
+        TitleSyncScreen(
+            route.mangaId, sourceId, cover, title, syncState, syncError,
+            onDismiss = { TitleSync.clearFailure(route.mangaId); wantsSync = false },
+            onLeave = { nav.back() },
+        )
+        return
+    }
+
     Box(Modifier.fillMaxSize().background(c.background)) {
-        PullToRefreshBox(isRefreshing = refreshing && all != null && all!!.isNotEmpty(), onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().glassSource(glass)) {
+        PullToRefreshBox(isRefreshing = refreshing && all != null && all!!.isNotEmpty(), onRefresh = { if (needsSync) wantsSync = true else vm.refresh() }, modifier = Modifier.fillMaxSize().glassSource(glass)) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                 item(key = "hero") {
                     Hero(sourceId, cover, title, manga, route.coverKey, all?.size)
@@ -289,27 +310,39 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                                 else -> "Start Reading" to n.name
                             }
                         }
-                        PrimaryButton(
-                            text = nextLabel?.first ?: if (refreshing) "Loading chapters…" else "No chapters yet",
-                            subtitle = nextLabel?.second,
-                            icon = Icons.Rounded.PlayArrow,
-                            enabled = next != null,
-                            loading = refreshing && next == null,
-                            onClick = { next?.let { nav.read(route.mangaId, it.id) } },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        if (needsSync) {
+                            PrimaryButton(
+                                text = "I want to read this",
+                                subtitle = "Syncs it and adds it to your library",
+                                icon = Icons.Rounded.Add,
+                                onClick = { wantsSync = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            PrimaryButton(
+                                text = nextLabel?.first ?: if (refreshing) "Loading chapters…" else "No chapters yet",
+                                subtitle = nextLabel?.second,
+                                icon = Icons.Rounded.PlayArrow,
+                                enabled = next != null,
+                                loading = refreshing && next == null,
+                                onClick = { next?.let { nav.read(route.mangaId, it.id) } },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            val inLibrary = manga?.favorite == true
-                            ActionTile(
-                                if (inLibrary) "In Library" else "Add to Library",
-                                if (inLibrary) Icons.Rounded.Check else Icons.Rounded.Add,
-                                active = inLibrary, modifier = Modifier.weight(1f),
-                            ) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                vm.toggleLibrary()
+                            if (!needsSync) {
+                                val inLibrary = manga?.favorite == true
+                                ActionTile(
+                                    if (inLibrary) "In Library" else "Add to Library",
+                                    if (inLibrary) Icons.Rounded.Check else Icons.Rounded.Add,
+                                    active = inLibrary, modifier = Modifier.weight(1f),
+                                ) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    vm.toggleLibrary()
+                                }
+                                ActionTile("Download", Icons.Rounded.Download, modifier = Modifier.weight(1f)) { vm.downloadUnread() }
                             }
-                            ActionTile("Download", Icons.Rounded.Download, modifier = Modifier.weight(1f)) { vm.downloadUnread() }
                             ActionTile("Share", Icons.Rounded.Share, modifier = Modifier.weight(1f)) {
                                 manga?.let { m ->
                                     Graph.sources.get(m.sourceId)?.webUrl(with(Graph.library) { m.toSManga() })?.let { url ->
@@ -369,20 +402,25 @@ private fun DetailsBody(route: Routes.Details, vm: DetailsViewModel) {
                     }
                 }
 
-                item(key = "about") { About(manga) }
+                // Before a sync there may be no description, and there are no chapters to list.
+                if (!needsSync || !manga?.description.isNullOrBlank()) item(key = "about") { About(manga) }
 
-                item(key = "chapter-header") {
-                    ChapterHeader(
-                        count = all?.size, filter = filter, descending = manga?.sortDescending != false,
-                        onSort = vm::toggleSort, onFilter = { vm.filter.value = it },
-                        onMarkAllRead = { all?.let { vm.markRead(it.map { ch -> ch.id }, true) } },
-                        onSelectAll = vm::selectAll,
-                        onExplore = { if (!all.isNullOrEmpty()) exploring = true },
-                    )
+                if (!needsSync) {
+                    item(key = "chapter-header") {
+                        ChapterHeader(
+                            count = all?.size, filter = filter, descending = manga?.sortDescending != false,
+                            onSort = vm::toggleSort, onFilter = { vm.filter.value = it },
+                            onMarkAllRead = { all?.let { vm.markRead(it.map { ch -> ch.id }, true) } },
+                            onSelectAll = vm::selectAll,
+                            onExplore = { if (!all.isNullOrEmpty()) exploring = true },
+                        )
+                    }
                 }
 
                 val visible = chapters
-                if (visible == null || (visible.isEmpty() && refreshing)) {
+                if (needsSync) {
+                    // Nothing to show until it's synced.
+                } else if (visible == null || (visible.isEmpty() && refreshing)) {
                     items(6) { ChapterSkeleton() }
                 } else if (visible.isEmpty()) {
                     item {

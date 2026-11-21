@@ -27,6 +27,7 @@ open class FolioApp : Application(), SingletonImageLoader.Factory {
         Notifications.createChannels(this)
         Graph.scope.launch {
             Graph.extensions.loadInstalled()
+            dev.pridgey.folio.work.TitleSync.restore(this@FolioApp)
             // Freshen extensions at start-up; this is quick and usually a no-op.
             if (Graph.settings.current.onboarded) Graph.extensions.checkForUpdates(install = true)
             // Titles read before auto-add existed join the library once, as they would have.
