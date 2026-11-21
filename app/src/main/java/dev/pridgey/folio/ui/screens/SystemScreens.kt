@@ -216,6 +216,8 @@ fun SourcesScreen() {
             }
         }
 
+        item { OptionalSource(ExtensionManager.COMIX, status, health) }
+
         item {
             GroupedSection(
                 header = "Fallback",
@@ -281,6 +283,56 @@ fun SourcesScreen() {
             dismissButton = { TextButton({ untrusted = null }) { Text("Cancel") } },
             containerColor = c.elevated,
         )
+    }
+}
+
+/** An extension that's only installed when asked for. */
+@Composable
+private fun OptionalSource(pkg: String, status: Map<String, ExtensionStatus>, health: Map<Long, Health>) {
+    val c = Folio.colors
+    val nav = LocalNav.current
+    val scope = rememberCoroutineScope()
+    val title = ExtensionManager.titleFor(pkg)
+    val ext = status[pkg] ?: ExtensionStatus(pkg, title)
+    val source = ext.installed?.sources?.firstOrNull()
+    GroupedSection(
+        header = "More sources",
+        footer = "$title is optional and English only. It's installed from Keiyoushi with the same signature check, then searched alongside your other sources.",
+    ) {
+        SourceHeader(title, ext, source?.id?.let { health[it] })
+        GroupedDivider()
+        when {
+            ext.busy != null -> GroupedRow(
+                when (ext.busy) {
+                    ExtensionStatus.Busy.CHECKING -> "Checking Keiyoushi…"
+                    ExtensionStatus.Busy.DOWNLOADING -> "Downloading…"
+                    ExtensionStatus.Busy.INSTALLING -> "Verifying and installing…"
+                },
+                icon = Icons.Rounded.Sync, iconBackground = Blue,
+            ) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = c.accent) }
+            ext.installed == null -> GroupedRow("Install $title", icon = Icons.Rounded.Download, iconBackground = Green, titleColor = c.accent, onClick = {
+                scope.launch { Graph.extensions.install(pkg) }
+            })
+            ext.updateAvailable -> GroupedRow("Update to ${ext.available?.versionName}", icon = Icons.Rounded.Download, iconBackground = Green, titleColor = c.accent, onClick = {
+                scope.launch { Graph.extensions.install(pkg) }
+            })
+        }
+        source?.let { src ->
+            if (ext.busy == null && ext.updateAvailable) GroupedDivider(59.dp)
+            if (src.configurable != null) {
+                GroupedRow("Source settings", icon = Icons.Rounded.Settings, iconBackground = Gray, chevron = true, onClick = { nav.sourceSettings(src.id) })
+                GroupedDivider(59.dp)
+            }
+            GroupedRow("Open $title", subtitle = "Pass a check by hand, or sign in", icon = Icons.Rounded.Public, iconBackground = Orange, chevron = true, onClick = { nav.web(src.homeUrl, title) })
+            GroupedDivider(59.dp)
+            GroupedRow("Remove $title", subtitle = "Titles stay in your library", icon = Icons.Rounded.Extension, iconBackground = Gray, titleColor = c.danger, onClick = {
+                Graph.extensions.uninstall(pkg)
+            })
+        }
+        ext.error?.let { err ->
+            GroupedDivider()
+            Text(err, style = Folio.type.footnote, color = c.danger, modifier = Modifier.padding(16.dp))
+        }
     }
 }
 

@@ -56,9 +56,23 @@ class SourceManager(
     fun primaryLanguages(): List<String> =
         extensions.status.value[ExtensionManager.MANGAFIRE]?.installed?.sources.orEmpty().map { it.lang }.ifEmpty { listOf("en") }
 
+    /** Installed optional sources (Comix) that offer the reading language. */
+    fun additional(): List<FolioSource> {
+        val lang = settings.current.language
+        return extensions.status.value.filterKeys { it != ExtensionManager.MANGAFIRE }.values
+            .flatMap { it.installed?.sources.orEmpty() }
+            .filter { it.lang == lang }
+    }
+
+    /** What Discover and Search offer, in order. */
+    fun browsable(): List<FolioSource> = listOfNotNull(primary()) + additional() + mangaDex
+
+    /** The installed source from extension [pkg], if any. */
+    fun fromPackage(pkg: String): FolioSource? = extensions.status.value[pkg]?.installed?.sources?.firstOrNull()
+
     fun nameOf(id: Long): String = get(id)?.name ?: when (id) {
         MangaDexSource.ID -> "MangaDex"
-        else -> ExtensionManager.titleFor(ExtensionManager.MANGAFIRE)
+        else -> extensions.rememberedName(id) ?: ExtensionManager.titleFor(ExtensionManager.MANGAFIRE)
     }
 
     /**

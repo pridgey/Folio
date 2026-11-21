@@ -161,6 +161,9 @@ fun DiscoverTab(glass: GlassState, vm: DiscoverViewModel = viewModel()) {
                     } else {
                         item { Chip("MangaFire", leading = Icons.Rounded.Extension, onClick = { nav.sources() }) }
                     }
+                    Graph.sources.additional().forEach { extra ->
+                        item(key = extra.id) { SourceChip(extra.name, extra.id == sourceId, health[extra.id]) { vm.selected.value = extra.id } }
+                    }
                     item { SourceChip("MangaDex", sourceId == MangaDexSource.ID, health[MangaDexSource.ID]) { vm.selected.value = MangaDexSource.ID } }
                 }
             }

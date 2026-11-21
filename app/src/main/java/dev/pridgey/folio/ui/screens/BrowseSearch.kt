@@ -433,7 +433,7 @@ class SearchViewModel(initial: String) : ViewModel() {
         }
         job = viewModelScope.launch {
             if (debounce) delay(450)
-            val sources = listOfNotNull(Graph.sources.primary(), Graph.sources.mangaDex)
+            val sources = Graph.sources.browsable()
             _results.value = sources.associate { it.id to Load.Loading }
             sources.forEach { src ->
                 launch {
@@ -478,7 +478,7 @@ fun SearchScreen(initial: String) {
             )
             BarTextButton("Cancel", { nav.back() })
         }
-        val sources = listOfNotNull(Graph.sources.primary(), Graph.sources.mangaDex)
+        val sources = Graph.sources.browsable()
         val people by vm.people.collectAsStateWithLifecycle()
         val tagHits by vm.tags.collectAsStateWithLifecycle()
         SegmentedControl(SearchKind.entries, vm.kind, { it.label }, vm::chooseKind, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
@@ -511,7 +511,7 @@ fun SearchScreen(initial: String) {
                     item {
                         EmptyState(
                             Icons.Rounded.SearchOff, "Search everything",
-                            "Folio searches MangaFire and MangaDex together. Paste a link to a title to open it directly.",
+                            "Folio searches all your sources together. Paste a link to a title to open it directly.",
                         )
                     }
                 }

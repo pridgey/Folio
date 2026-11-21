@@ -114,6 +114,7 @@ class ExtensionManager(
             }
         }.filterIsInstance<HttpSource>().map { ExtensionSource(it, pkg) }
         check(sources.isNotEmpty()) { "The extension has no sources" }
+        prefs.edit().apply { sources.forEach { putString("sourceName.${it.id}", it.name) } }.apply()
         return ExtensionStatus.Installed(info.versionName.orEmpty(), versionCode(info), lib, signer, sources)
     }
 
@@ -147,9 +148,13 @@ class ExtensionManager(
             setStatus(pkg) { it.copy(error = "The newest ${entry.name} needs a newer Folio (extension API ${entry.libVersion})") }
             return false
         }
-        val current = _status.value[pkg]?.installed ?: return true
+        // Only MangaFire installs itself; optional sources wait until they're asked for.
+        val current = _status.value[pkg]?.installed ?: return pkg == MANGAFIRE
         return entry.versionCode > current.versionCode
     }
+
+    /** The name of a source that was installed at some point, so its titles stay labelled after removal. */
+    fun rememberedName(sourceId: Long): String? = prefs.getString("sourceName.$sourceId", null)
 
     /** Installs one extension from the store. */
     suspend fun install(pkg: String): Result<Unit> = mutex.withLock {
@@ -268,7 +273,8 @@ class ExtensionManager(
         private const val HEAL_COOLDOWN_MS = 5 * 60 * 1000L
 
         const val MANGAFIRE = "eu.kanade.tachiyomi.extension.all.mangafire"
-        val MANAGED = listOf(MANGAFIRE)
+        const val COMIX = "eu.kanade.tachiyomi.extension.en.comix"
+        val MANAGED = listOf(MANGAFIRE, COMIX)
         val SUPPORTED_LIBS = setOf(1.6)
 
         /** Keiyoushi's signing key. */
@@ -276,6 +282,7 @@ class ExtensionManager(
 
         fun titleFor(pkg: String) = when (pkg) {
             MANGAFIRE -> "MangaFire"
+            COMIX -> "Comix"
             else -> pkg.substringAfterLast('.')
         }
     }

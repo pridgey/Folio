@@ -214,11 +214,12 @@ fun FolioNavHost(activity: MainActivity) {
     }
 }
 
-/** Opens a MangaFire or MangaDex link as a title in Folio. */
+/** Opens a MangaFire, Comix or MangaDex link as a title in Folio. */
 private suspend fun openLink(nav: Nav, url: String) {
     val sources = Graph.sources
     val sourceId = when {
         "mangadex.org" in url -> MangaDexSource.ID
+        "comix.to" in url -> sources.fromPackage(dev.pridgey.folio.source.ExtensionManager.COMIX)?.id ?: return
         else -> sources.primary()?.id ?: return
     }
     runCatching { sources.search(sourceId, url) }.getOrNull()?.mangas?.firstOrNull()?.let { nav.title(sourceId, it) }
