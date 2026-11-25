@@ -91,8 +91,19 @@ object CrashReporter {
         // Exits not shown yet (the first time, anything in the last few hours). Updating the app is an
         // exit too, so look past it for the most recent abnormal one.
         val since = if (seenUntil == 0L) System.currentTimeMillis() - FIRST_RUN_LOOKBACK_MS else seenUntil
-        val bad = exits.filter { it.timestamp > since && it.reason in ABNORMAL }.maxByOrNull { it.timestamp } ?: return null
+        val bad = exits.filter { it.timestamp > since && isAbnormal(it) }.maxByOrNull { it.timestamp } ?: return null
         return describe(bad)
+    }
+
+    /**
+     * The system reclaims memory by killing background apps all the time; that's routine, not a crash.
+     * A low-memory kill only counts while Folio was in use: on screen, or running a download.
+     */
+    @RequiresApi(30)
+    private fun isAbnormal(exit: ApplicationExitInfo): Boolean = when (exit.reason) {
+        ApplicationExitInfo.REASON_LOW_MEMORY ->
+            exit.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_PERCEPTIBLE
+        else -> exit.reason in ABNORMAL
     }
 
     private val ABNORMAL = setOf(
